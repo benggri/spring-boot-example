@@ -6,7 +6,7 @@
 
 **Architecture:** `core`(엔티티, JPA, QueryDSL, 서비스, JWT)에 `api-rest`, `api-graphql`, `api-grpc` 세 앱이 단방향으로 의존한다. 어댑터는 서비스만 호출하는 얇은 계층이다. JWT는 자체 발급하며 같은 토큰을 HTTP 헤더와 gRPC 메타데이터에 쓴다.
 
-**Tech Stack:** Spring Boot 4.2.0, Java 21, Gradle Groovy, Spring Security(oauth2-jose), Spring Data JPA, QueryDSL, Flyway, PostgreSQL, springdoc-openapi, spring-graphql, spring-grpc, Testcontainers, Checkstyle, Jib.
+**Tech Stack:** Spring Boot 4.2.0, Java 21, Gradle Groovy, Spring Security(oauth2-jose), Spring Data JPA, QueryDSL, Flyway, PostgreSQL, springdoc-openapi, spring-graphql, Spring Boot 내장 gRPC 스타터(`spring-boot-starter-grpc-server`), Testcontainers, Checkstyle, Jib, Spring AOP, Actuator + Micrometer + Prometheus.
 
 **Spec:** `docs/superpowers/specs/2026-11-25-spring-boot-example-design.md`
 **Requirements:** `docs/requirements/2026-11-25/01/INITIAL-REQUIREMENTS.md`
@@ -21,6 +21,9 @@
 - DB는 PostgreSQL. 실행은 docker-compose, 테스트는 Testcontainers.
 - 시큐어 코딩: SQL은 파라미터 바인딩(QueryDSL/JPA)만, 비밀번호는 BCrypt, 응답에 해시·시크릿 노출 금지.
 - 모듈별 `README.md`에 "왜 이렇게 했는가"를 기록한다.
+- Spring AOP는 `core` 서비스 계층에만 적용한다(`ServiceLoggingAspect`, `AuditAspect`, `@Audited`). 로그에 메서드 인자 값을 남기지 않는다.
+- 모니터링: 각 api 앱은 Actuator를 별도 management 포트로 노출하고 `health`, `prometheus`만 노출한다(나머지 엔드포인트 비노출). 메트릭 태그는 저카디널리티(class, method, outcome)만 쓰고 인자·사용자 식별자는 태그로 쓰지 않는다.
+- 개발 방식은 Spec-driven + Subagent-driven. 요구사항 변경은 요구사항 → spec → 계획 순서로 문서를 먼저 갱신한다. `docs/ai-dlc/GUIDE.md`가 이를 설명한다.
 - Docker 이미지는 Jib Gradle 플러그인으로만 빌드한다(Dockerfile 금지). 대상은 `api-rest`, `api-graphql`, `api-grpc`. `JWT_SECRET`·DB 비밀번호는 이미지에 포함하지 않고 실행 시 환경 변수로 주입한다.
 
 ## TDD Workflow (모든 Task에 적용)
@@ -38,6 +41,8 @@
 - 이미 있는 이메일로 가입 → 409 / `ALREADY_EXISTS`, 500 아님.
 - `USER`가 남의 게시글 수정·삭제 → 403 / `PERMISSION_DENIED`.
 - 검색 `size`가 과도하게 큼(예: 10000) → 100으로 제한, 음수 page → 400.
+- `/actuator/env` 같은 비노출 엔드포인트와 메인 포트의 `/actuator/prometheus` 접근 → 404/401, 메트릭 라벨에 비밀번호·이메일 없음.
+- 서비스가 예외를 던져도 AOP가 예외를 삼키거나 바꾸지 않고, 로그에 비밀번호 원문이 남지 않음.
 - 키워드가 빈 문자열이거나 `%`, `_` 포함 → 전체 조회 또는 리터럴 검색, 오류 없음.
 
 ## File Structure
@@ -45,9 +50,10 @@
 ```
 settings.gradle, build.gradle, gradle.properties, docker-compose.yml, .gitignore
 config/checkstyle/checkstyle.xml
-core/    src/main/java/com/benggri/example/core/{common,member,post,security}
+core/    src/main/java/com/benggri/example/core/{common,member,post,security,aop}
          src/main/resources/db/migration/V1__init.sql
          src/test/java/...  (Testcontainers 지원: support/PostgresTestBase)
+monitoring/prometheus.yml
 api-rest/    .../rest/{config,auth,member,post,error}   + README.md
 api-graphql/ .../graphql/{config,member,post} + resources/graphql/schema.graphqls + README.md
 api-grpc/    .../grpc/{config,member,post,auth}  + src/main/proto/*.proto + README.md
@@ -177,9 +183,61 @@ README.md (루트), CLAUDE.md
 
 **Files:** Create/Modify 루트 `README.md`, 각 모듈 `README.md` 보강, `CLAUDE.md`(`claude-md-management:revise-claude-md` 사용). Test: 없음(문서). 전체 검증 명령 실행.
 
-- [ ] **Step 1:** 루트 README에 모듈 지도, 실행 순서(`docker compose up -d` → `JWT_SECRET` 설정 → `bootRun`), 세 프로토콜 호출 예제(curl, GraphQL 쿼리, grpcurl), TDD 워크플로 요약, 모듈을 가져가는 법을 쓴다.
+- [ ] **Step 1:** 루트 README에 모듈 지도, AI-DLC 가이드 링크(`docs/ai-dlc/GUIDE.md`), 모니터링(Prometheus 실행·메트릭 목록), AOP 로그 읽는 법, 실행 순서(`docker compose up -d` → `JWT_SECRET` 설정 → `bootRun`), 세 프로토콜 호출 예제(curl, GraphQL 쿼리, grpcurl), TDD 워크플로 요약, 모듈을 가져가는 법을 쓴다.
 - [ ] **Step 2: Verify.** Run: `./gradlew clean check` → Expected: BUILD SUCCESSFUL(전 모듈 테스트, Checkstyle 위반 0).
 - [ ] **Step 3: 시크릿 점검.** Run: `grep -rniE "(password|secret|apikey)\s*[:=]\s*[\"'][^$]" --include=*.java --include=*.yml --include=*.gradle . | grep -v src/test` → Expected: 출력 없음.
 - [ ] **Step 3b: Jib 이미지.** 세 api 모듈에 Jib를 설정한다(`from.image=eclipse-temurin:21-jre`, `to.image=benggri/spring-boot-example-<module>:${version}`, 컨테이너 포트 노출, `environment`에는 시크릿 넣지 않음). 공통 설정은 루트 `build.gradle`의 `subprojects` 블록에서 `api-*`에만 적용한다. Run: `./gradlew :api-rest:jibDockerBuild` 후 `docker run --rm -e JWT_SECRET=<32바이트 이상 임의값> -e SPRING_DATASOURCE_URL=... <image>`로 기동 확인, `docker history <image>`와 `docker inspect`에서 시크릿 문자열이 없는지 확인한다. Expected: 세 이미지 모두 빌드·기동 성공, 이미지에 시크릿 없음. 루트 README에 이미지 빌드·실행법을 추가한다.
 - [ ] **Step 4:** `/claude-md-management:revise-claude-md`로 `CLAUDE.md`를 작성·개선한다(빌드·테스트 명령, 모듈 구조, 가이드).
 - [ ] **Step 5: Commit** `docs: add readmes and claude.md`.
+
+### Task 10: Spring AOP (로깅·감사) — **Task 5 직후, Task 6 전에 실행**
+
+**Files:** Create `core/.../aop/{AopProperties,Audited,ServiceLoggingAspect,AuditAspect}.java`. Modify `core/build.gradle`(AOP 스타터; Boot 4에서의 정확한 아티팩트명은 해석해 확인), `MemberService`·`PostService`의 쓰기 메서드에 `@Audited` 부착. Test: `ServiceLoggingAspectTest`, `AuditAspectTest`, `AopIntegrationTest`.
+
+**Interfaces:**
+- `@ConfigurationProperties("app.aop") record AopProperties(long slowThresholdMs)` (기본 500).
+- `@Retention(RUNTIME) @Target(METHOD) @interface Audited { String value(); }` (동작명 예: `post.delete`).
+- `ServiceLoggingAspect`: `@Around("execution(* com.benggri.example.core..*Service.*(..))")` — DEBUG로 `class.method took Nms`, `slowThresholdMs` 초과 시 WARN. 인자 값은 절대 기록하지 않는다(메서드명만).
+- `AuditAspect`: `@Around("@annotation(audited)")` — 인자 중 `AuthUser`가 있으면 그 `id`, 없으면 `anonymous`를 행위자로, `action=<value> actor=<id> outcome=SUCCESS|FAILURE(<예외 클래스명>)`을 INFO로 기록. 예외는 그대로 다시 던진다.
+- 로거 이름: `audit` (감사 로그 분리용).
+
+- [ ] **Step 1: Red.** Logback `ListAppender`로 테스트: `logging_recordsMethodAndDuration`, `logging_warnsWhenOverThreshold`(임계값 0으로 설정), `logging_neverContainsArgumentValues`(`register("a@b.c", "s3cretPw!", "n")` 호출 후 로그에 `s3cretPw!`·`a@b.c` 없음), `audit_logsActorAndSuccess`, `audit_logsFailureAndRethrowsSameException`(같은 인스턴스), `audit_usesAnonymousWithoutAuthUser`, `aspects_doNotChangeReturnValue`, 통합 `aop_appliesToTransactionalServiceProxies`(실제 `PostService.create` 호출 시 audit 로그 1건). Run: `./gradlew :core:test` → FAIL.
+- [ ] **Step 2: Green.** 위 인터페이스대로 구현. `@Audited`는 `MemberService.register/update/delete`, `PostService.create/update/delete`에 붙인다.
+- [ ] **Step 3: Verify.** `./gradlew :core:check` → PASS.
+- [ ] **Step 4: Commit** `feat(core): add logging and audit aspects`.
+
+### Task 11: Prometheus 모니터링 — **Task 8 직후, Task 9 전에 실행**
+
+**Files:** Create `monitoring/prometheus.yml`, `api-rest|api-graphql|api-grpc/.../config/ManagementSecurityConfig.java`(rest·graphql; grpc는 아래 참고). Modify 각 `api-*/build.gradle`(actuator, `micrometer-registry-prometheus`), 각 `application.yml`, `docker-compose.yml`(프로필 `monitoring`의 prometheus 서비스), `core/.../aop/ServiceLoggingAspect.java`(Timer 추가), `ServiceLoggingAspectTest`. Test: 각 모듈 `ManagementEndpointsTest`.
+
+**Interfaces:**
+- 각 앱 `application.yml`: `management.server.port`(rest 8081, graphql 8082, grpc 8083), `management.endpoints.web.exposure.include=health,prometheus`, `management.endpoint.health.probes.enabled=true`.
+- `ManagementSecurityConfig`: `SecurityFilterChain`(`@Order(1)`, `EndpointRequest.toAnyEndpoint()`에 대해 `health`·`prometheus`만 permitAll, 나머지 denyAll).
+- `ServiceLoggingAspect`: 호출마다 `Timer`를 `app.service.invocation`(태그 `class`, `method`, `outcome`=`success|failure`)로 기록. `MeterRegistry`는 생성자 주입.
+- `api-grpc`: gRPC 포트와 별개로 actuator용 서블릿 컨테이너를 management 포트에만 띄운다. spring-grpc가 제공하는 gRPC 서버 관측(observation) 인터셉터가 있으면 켠다. 구현 방식은 구현자가 정하고 README에 근거를 기록한다.
+- `monitoring/prometheus.yml`: 세 앱의 management 포트를 `host.docker.internal`로 scrape(`/actuator/prometheus`).
+
+- [ ] **Step 1: Red.** 테스트(`@SpringBootTest(webEnvironment=RANDOM_PORT)` + `@LocalManagementPort`, Testcontainers): `prometheus_returnsMetricsOnManagementPort`(200, 본문에 `jvm_memory_used_bytes`), `prometheus_notExposedOnMainPort`(404 또는 401), `env_endpointNotExposed`(management 포트에서 404), `health_isUp`, `serviceCall_recordsInvocationTimer`(서비스 호출 후 `app_service_invocation_seconds_count`가 1 이상, 라벨에 `outcome="success"`), `serviceFailure_recordsFailureOutcome`, `metrics_neverContainPasswordOrEmail`. 코어 단위: `ServiceLoggingAspectTest.recordsTimerWithClassMethodOutcomeTags`(`SimpleMeterRegistry`). Run: `./gradlew check` → FAIL.
+- [ ] **Step 2: Green.** 위 인터페이스대로 구현한다. docker-compose의 prometheus는 `profiles: ["monitoring"]`, `monitoring/prometheus.yml`을 볼륨 마운트하고 시크릿을 넣지 않는다.
+- [ ] **Step 3: Verify.** Run: `./gradlew check` → PASS. 수동: `docker compose --profile monitoring up -d` 후 Prometheus UI(`:9090`) targets가 UP인지 확인(앱 기동 상태에서).
+- [ ] **Step 4: Commit** `feat: expose prometheus metrics on management port`.
+
+### Task 12: AI-DLC 가이드 문서 — **Task 11 직후, Task 9 전에 실행**
+
+**Files:** Create `docs/ai-dlc/GUIDE.md`. Test: 없음(문서). 경로 검증 명령으로 대체.
+
+**Interfaces:** Produces: 루트 README(Task 9)가 링크할 `docs/ai-dlc/GUIDE.md`.
+
+가이드에 반드시 들어갈 절(8개, 한국어, 170줄 안팎, 한 번에 쓰지 말고 절 단위로 작성):
+1. **개요:** AI-DLC가 무엇이고 이 저장소가 왜 Spec-driven + Subagent-driven을 쓰는지. AWS AI-DLC 원문과 구분해 "이 저장소의 해석"임을 명시.
+2. **단계 대응표:** Intent=`INITIAL-REQUIREMENTS.md`, Inception=브레인스토밍→spec(`docs/superpowers/specs/`)→계획(`docs/superpowers/plans/`), Unit=계획의 Task, Bolt=Task 하나의 구현→리뷰→수정 사이클, Construction=subagent-driven-development, Operations=Jib 이미지·Prometheus·README 런북·CLAUDE.md.
+3. **Spec-driven 규칙:** spec이 최종 권위, 계획은 spec의 논거. 요구사항 변경은 문서(요구사항→spec→계획)를 먼저 고친 뒤 구현. 이 프로젝트에서 실제로 일어난 변경(PostgreSQL, TDD, Jib, AOP, Prometheus) 예시를 표로 제시.
+4. **Subagent-driven 규칙:** Task마다 새 구현 서브에이전트(brief 파일 전달), Task 리뷰(스펙 준수+품질), fix loop, 최종 전체 리뷰, ledger(`.superpowers/sdd/<plan>/progress.md`)로 진행 기록, 모델은 작업 난이도별 선택, 판단 사항은 `Ruling:`으로 기록.
+5. **사람의 게이트:** 요구사항 확정, spec 승인, 계획 검토, 최종 리뷰·병합. 에이전트가 멈추고 묻는 경우(파괴적 작업, 보안 민감 작업, 외부 부작용, 계획 붕괴).
+6. **품질 가드레일:** TDD(Red→Green→Refactor, Green에서만 커밋), 함수 60줄/클래스 350줄(Checkstyle), 시크릿 하드코딩 금지, 인자 값 로깅 금지.
+7. **따라 하기:** 새 기능을 추가할 때의 단계별 체크리스트(요구사항 수정 → `/superpowers:brainstorming` → spec 승인 → `writing-plans` → `subagent-driven-development` → `claude-md-management`로 CLAUDE.md 갱신).
+8. **OKF(Open Knowledge Format) 활용 (선택):** (a) 무엇인가: Google Cloud가 공개한, 마크다운 파일 + YAML frontmatter로 AI 에이전트용 지식을 담는 번들 형식. 개념 하나가 파일 하나, 필수 필드는 `type`뿐, `index.md`(점진적 공개)·`log.md`는 선택, `type` 없는 `.md`(README.md, AGENTS.md, CLAUDE.md 등)는 건너뜀. (b) 상태: 2026-11 기준 v0.3, 1.0 이전이라 minor에서도 깨지는 변경 가능 — 도입 전 공식 저장소(`github.com/open-knowledge-format/open-knowledge-format`)에서 최신 버전 확인. (c) 에이전트 스킬: `okf-generate`(번들 작성·갱신·마이그레이션·검증), `okf-consume`(번들 기반 질의응답, 신뢰 등급·상태·최신성 보고); Agent Skills 형식이며 설치법은 저장소 README `#agent-skills`. (d) 이 프로젝트에서의 위치: 필수 아님. 기존 문서(CLAUDE.md, spec, 계획)는 OKF가 아니며 바꾸지 않는다. 도메인 개념·결정 기록처럼 여러 서브에이전트가 반복해 참조할 지식이 커질 때 `docs/knowledge/` 번들로 분리하는 선택지로만 소개하고, 예시 레이아웃(`docs/knowledge/index.md`, `domain/member.md`, `decisions/jwt-self-issued.md`)과 frontmatter 예(`type` 값은 공식 예시·스펙을 확인해 그대로 쓰고 임의로 만들지 않는다)를 짧게 보여 준다. (e) 한계: 컨테이너(폴더·frontmatter) 규격이지 지식의 의미까지 표준화하지 않는다는 비판이 있음. 사실이 아닌 필드·명령은 쓰지 않는다.
+
+- [ ] **Step 1: 작성.** 위 8개 절을 쓴다(OKF 절은 마지막)(절마다 Write/Edit로 나눠서). 사실이 아닌 내용(없는 명령·경로)을 쓰지 않는다.
+- [ ] **Step 2: Verify.** Run: `grep -o '`docs/[^`]*`' docs/ai-dlc/GUIDE.md | tr -d '`' | sort -u | xargs -I{} sh -c 'test -e "{}" || echo MISSING {}'` → Expected: 출력 없음(참조한 docs 경로가 모두 존재). 8개 절 제목이 모두 있는지 `grep -c '^## ' docs/ai-dlc/GUIDE.md` → 8 이상.
+- [ ] **Step 3: Commit** `docs: add ai-dlc guide`.
