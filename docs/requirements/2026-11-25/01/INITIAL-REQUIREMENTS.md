@@ -71,7 +71,7 @@
   - Spec-driven: 요구사항 → 브레인스토밍 → 설계 문서(spec) 승인 → 구현 계획 → 구현. 요구사항이 바뀌면 코드보다 문서(요구사항, spec, 계획)를 먼저 고친다.
   - Subagent-driven: 작업(Task)마다 새 서브에이전트가 구현하고, 별도 리뷰어가 검토하며, 마지막에 전체 브랜치를 리뷰한다.
 - AI-DLC(AI-Driven Development Life Cycle) 가이드 문서를 `docs/ai-dlc/GUIDE.md`로 제공한다. 이 프로젝트의 흐름을 Inception, Construction, Operations 단계에 대응시켜 설명한다.
-- 가이드에 Google의 OKF(Open Knowledge Format)를 AI 코딩 에이전트용 지식 공유 방식으로 소개한다(선택 사항, 1.0 이전 사양임을 명시).
+- 가이드에 Google의 OKF(Open Knowledge Format)를 AI 코딩 에이전트용 지식 공유 방식으로 소개한다(선택 사항, 1.0 이전 사양임을 명시). 같은 절에서 graphify(코드·문서를 지식 그래프로 자동 생성)와 비교해 어떤 상황에 무엇이 유리한지 설명한다.
 
 ## AI 스킬
 
