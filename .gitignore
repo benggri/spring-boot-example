@@ -1,0 +1,11 @@
+# Claude / SDD scratch
+.claude/tmp/
+.superpowers/
+
+# Build
+build/
+.gradle/
+*.class
+.idea/
+*.iml
+.env
