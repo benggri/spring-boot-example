@@ -4,6 +4,8 @@ import com.benggri.example.core.common.DuplicateException;
 import com.benggri.example.core.common.ForbiddenException;
 import com.benggri.example.core.common.NotFoundException;
 import com.benggri.example.core.security.AuthUser;
+import com.benggri.example.core.post.PostRepository;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -15,10 +17,13 @@ import org.springframework.transaction.annotation.Transactional;
 public class MemberService {
 
     private final MemberRepository memberRepository;
+    private final PostRepository postRepository;
     private final PasswordEncoder passwordEncoder;
 
-    public MemberService(MemberRepository memberRepository, PasswordEncoder passwordEncoder) {
+    public MemberService(MemberRepository memberRepository, PostRepository postRepository,
+            PasswordEncoder passwordEncoder) {
         this.memberRepository = memberRepository;
+        this.postRepository = postRepository;
         this.passwordEncoder = passwordEncoder;
     }
 
@@ -27,7 +32,12 @@ public class MemberService {
             throw new DuplicateException("Email already registered: " + email);
         }
         Member member = Member.create(email, passwordEncoder.encode(rawPassword), name, Role.USER);
-        return MemberResult.from(memberRepository.save(member));
+        try {
+            return MemberResult.from(memberRepository.saveAndFlush(member));
+        } catch (DataIntegrityViolationException e) {
+            // the unique index on email is the authority when two registrations race
+            throw new DuplicateException("Email already registered: " + email);
+        }
     }
 
     @Transactional(readOnly = true)
@@ -50,6 +60,7 @@ public class MemberService {
     public void delete(AuthUser actor, Long id) {
         Member member = find(id);
         requireSelfOrAdmin(actor, id);
+        postRepository.deleteByMemberId(id);
         memberRepository.delete(member);
     }
 
