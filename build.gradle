@@ -45,7 +45,7 @@ subprojects {
         useJUnitPlatform()
     }
 
-    if (name.startsWith('api-')) {
+    if (name.startsWith('api-') || name == 'batch') {
         apply plugin: 'com.google.cloud.tools.jib'
         dependencies {
             implementation project(':core')
