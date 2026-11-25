@@ -6,7 +6,7 @@
 
 **Architecture:** `core`(엔티티, JPA, QueryDSL, 서비스, JWT)에 `api-rest`, `api-graphql`, `api-grpc` 세 앱이 단방향으로 의존한다. 어댑터는 서비스만 호출하는 얇은 계층이다. JWT는 자체 발급하며 같은 토큰을 HTTP 헤더와 gRPC 메타데이터에 쓴다.
 
-**Tech Stack:** Spring Boot 4.2.0, Java 21, Gradle Groovy, Spring Security(oauth2-jose), Spring Data JPA, QueryDSL, Flyway, PostgreSQL, springdoc-openapi, spring-graphql, Spring Boot 내장 gRPC 스타터(`spring-boot-starter-grpc-server`), Testcontainers, Checkstyle, Jib, Lombok, Spring AOP, Actuator + Micrometer + Prometheus.
+**Tech Stack:** Spring Boot 4.2.0, Java 21, Gradle Groovy, Spring Security(oauth2-jose), Spring Data JPA, QueryDSL, Flyway, PostgreSQL, springdoc-openapi, spring-graphql, Spring Boot 내장 gRPC 스타터(`spring-boot-starter-grpc-server`), Testcontainers, Checkstyle, Jib, Lombok, Spring Batch, Spring AOP, Actuator + Micrometer + Prometheus.
 
 **Spec:** `docs/superpowers/specs/2026-11-25-spring-boot-example-design.md`
 **Requirements:** `docs/requirements/2026-11-25/01/INITIAL-REQUIREMENTS.md`
@@ -14,7 +14,7 @@
 ## Global Constraints
 
 - Spring Boot 4.2.0, Java 21, Gradle Groovy DSL (`build.gradle`, `settings.gradle`).
-- 모듈: `core`, `api-rest`, `api-graphql`, `api-grpc`. 의존은 `api-*` → `core` 단방향.
+- 모듈: `core`, `api-rest`, `api-graphql`, `api-grpc`, `batch`. 의존은 `api-*`, `batch` → `core` 단방향.
 - 패키지 루트 `com.benggri.example` (`.core`, `.rest`, `.graphql`, `.grpc`). 도메인은 `Member` 1:N `Post`.
 - 함수 60라인 이하, 클래스 350라인 이하, 한 함수 한 역할. Checkstyle(`MethodLength` 60, `FileLength` 350)로 강제한다.
 - 인증은 자체 발급 JWT(access/refresh), 역할 `USER`/`ADMIN`. 시크릿은 환경 변수 `JWT_SECRET`, 코드·yml에 기본값 하드코딩 금지.
@@ -27,7 +27,7 @@
 - getter/setter는 직접 작성하지 않고 Lombok(`@Getter`, 필요한 곳에만 `@Setter`)을 쓴다. 엔티티에는 `@Setter` 금지(상태 변경은 도메인 메서드). record에는 Lombok 불필요. 생성자 계열 Lombok 어노테이션은 쓰지 않는다.
 - 패키지 구조: 기능별 폴더 안에 단수형 계층 폴더 `entity`(엔티티·enum), `repository`, `service`, `dto`를 둔다(`core/<member|post>/...`). `security`·`aop`·`common`·`config`는 평평하게 둔다. 어댑터 모듈도 `controller`, `dto`, `config` 등 단수형 폴더를 쓴다.
 - 앱 모듈(`api-*`)은 `core`가 다른 패키지 트리라서 `@SpringBootApplication(scanBasePackages = "com.benggri.example")`와 `@EntityScan("com.benggri.example.core")`, `@EnableJpaRepositories("com.benggri.example.core")`로 `core`를 스캔해야 한다.
-- Docker 이미지는 Jib Gradle 플러그인으로만 빌드한다(Dockerfile 금지). 대상은 `api-rest`, `api-graphql`, `api-grpc`. `JWT_SECRET`·DB 비밀번호는 이미지에 포함하지 않고 실행 시 환경 변수로 주입한다.
+- Docker 이미지는 Jib Gradle 플러그인으로만 빌드한다(Dockerfile 금지). 대상은 `api-rest`, `api-graphql`, `api-grpc`, `batch`. `JWT_SECRET`·DB 비밀번호는 이미지에 포함하지 않고 실행 시 환경 변수로 주입한다.
 
 ## TDD Workflow (모든 Task에 적용)
 
@@ -57,6 +57,7 @@ core/    src/main/java/com/benggri/example/core/{common,config,security,aop} 와
          src/main/resources/db/migration/V1__init.sql
          src/test/java/...  (Testcontainers 지원: support/PostgresTestBase)
 monitoring/prometheus.yml
+batch/       .../batch/{config,job,step,dto} + README.md
 api-rest/    .../rest/{config,auth,member,post,error}   + README.md
 api-graphql/ .../graphql/{config,member,post} + resources/graphql/schema.graphqls + README.md
 api-grpc/    .../grpc/{config,member,post,auth}  + src/main/proto/*.proto + README.md
@@ -189,7 +190,7 @@ README.md (루트), CLAUDE.md
 - [ ] **Step 1:** 루트 README에 모듈 지도, AI-DLC 가이드 링크(`docs/ai-dlc/GUIDE.md`), 모니터링(Prometheus 실행·메트릭 목록), AOP 로그 읽는 법, 실행 순서(`cp .env.example .env` → `JWT_SECRET` 입력 → `docker compose up -d` → `bootRun`), 세 프로토콜 호출 예제(curl, GraphQL 쿼리, grpcurl), TDD 워크플로 요약, 모듈을 가져가는 법을 쓴다.
 - [ ] **Step 2: Verify.** Run: `./gradlew clean check` → Expected: BUILD SUCCESSFUL(전 모듈 테스트, Checkstyle 위반 0).
 - [ ] **Step 3: 시크릿 점검.** Run: `grep -rniE "(password|secret|apikey)\s*[:=]\s*[\"'][^$]" --include=*.java --include=*.yml --include=*.gradle . | grep -v src/test` → Expected: 출력 없음.
-- [ ] **Step 3b: Jib 이미지.** 세 api 모듈에 Jib를 설정한다(`from.image=eclipse-temurin:21-jre`, `to.image=benggri/spring-boot-example-<module>:${version}`, 컨테이너 포트 노출, `environment`에는 시크릿 넣지 않음). 공통 설정은 루트 `build.gradle`의 `subprojects` 블록에서 `api-*`에만 적용한다. Run: `./gradlew :api-rest:jibDockerBuild` 후 `docker run --rm -e JWT_SECRET=<32바이트 이상 임의값> -e SPRING_DATASOURCE_URL=... <image>`로 기동 확인, `docker history <image>`와 `docker inspect`에서 시크릿 문자열이 없는지 확인한다. Expected: 세 이미지 모두 빌드·기동 성공, 이미지에 시크릿 없음. 루트 README에 이미지 빌드·실행법을 추가한다.
+- [ ] **Step 3b: Jib 이미지.** 세 api 모듈과 `batch` 모듈에 Jib를 설정한다(`batch`의 설정은 Task 15에서 이미 되어 있으면 확인만)(`from.image=eclipse-temurin:21-jre`, `to.image=benggri/spring-boot-example-<module>:${version}`, 컨테이너 포트 노출, `environment`에는 시크릿 넣지 않음). 공통 설정은 루트 `build.gradle`의 `subprojects` 블록에서 `api-*`에만 적용한다. Run: `./gradlew :api-rest:jibDockerBuild` 후 `docker run --rm -e JWT_SECRET=<32바이트 이상 임의값> -e SPRING_DATASOURCE_URL=... <image>`로 기동 확인, `docker history <image>`와 `docker inspect`에서 시크릿 문자열이 없는지 확인한다. Expected: 네 이미지(api-rest, api-graphql, api-grpc, batch) 모두 빌드·기동 성공(batch는 `runDate` 인자로 잡 1회 실행 후 종료), 이미지에 시크릿 없음. 루트 README에 이미지 빌드·실행법을 추가한다.
 - [ ] **Step 4:** `/claude-md-management:revise-claude-md`로 `CLAUDE.md`를 작성·개선한다(빌드·테스트 명령, 모듈 구조, 가이드).
 - [ ] **Step 5: Commit** `docs: add readmes and claude.md`.
 
@@ -268,3 +269,20 @@ README.md (루트), CLAUDE.md
 - [ ] **Step 3: Green.** `git mv`로 이동하고 `package` 선언·`import`·Spring Data 스캔·`QueryDslConfig`의 참조를 고친다. `@Entity` 스캔과 Flyway/JPA 설정이 이동 후에도 동작해야 한다(`ddl-auto=validate` 통과).
 - [ ] **Step 4: Verify.** Run: `./gradlew check` → PASS(Q클래스 생성, Checkstyle 위반 0). Run: `find core/src/main/java/com/benggri/example/core/member core/src/main/java/com/benggri/example/core/post -maxdepth 1 -name '*.java'` → Expected: 출력 없음.
 - [ ] **Step 5: Commit** `refactor(core): organize packages by feature and layer`.
+
+### Task 15: Spring Batch 예제 모듈 — **Task 11 직후, Task 12 전에 실행**
+
+**Files:** Create `batch/build.gradle`, `batch/src/main/java/com/benggri/example/batch/BatchApplication.java`, `.../batch/config/{PersistenceConfig,BatchProperties}.java`, `.../batch/job/MemberPostStatsJobConfig.java`, `.../batch/step/{PostCountReader 설정, PostCountProcessor, StatWriter 설정, StatsPurgeTasklet}`(구현 형태는 구현자 선택, 각 클래스 단일 책임), `.../batch/dto/PostCountRow.java`, `batch/src/main/resources/application.yml`, `batch/README.md`; Create `core/src/main/resources/db/migration/V2__member_post_stats.sql`, `core/.../stats/entity/MemberPostStat.java`(+`repository`는 필요할 때만). Modify `settings.gradle`(`include 'batch'`), 루트 `build.gradle`(`api-*` 조건에 `batch`를 포함해 Jib 적용과 core 의존 연결). Test: `MemberPostStatsJobTest`, `PostCountProcessorTest`, `StatsPurgeTaskletTest`, `RunDateValidatorTest`.
+
+**Interfaces:**
+- 잡 이름 `memberPostStatsJob`, 파라미터 `runDate`(ISO `yyyy-MM-dd`, 필수, 형식 오류 시 시작 거부 — `JobParametersValidator`).
+- `V2__member_post_stats.sql`: `member_post_stats(member_id BIGINT NOT NULL REFERENCES members(id), stat_date DATE NOT NULL, post_count INTEGER NOT NULL, created_at TIMESTAMPTZ NOT NULL, PRIMARY KEY (member_id, stat_date))`. 회원 삭제 시 통계도 지워져야 하므로 `MemberService.delete`의 삭제 순서에 통계 삭제를 포함하거나 FK에 `ON DELETE CASCADE`를 둔다(구현자가 선택하고 근거를 README에 기록; V1은 수정 금지).
+- Step1 `aggregatePostCountsStep`(chunk, 크기 `app.batch.chunk-size` 기본 100): reader는 `runDate` 하루(시스템 기본 타임존이 아닌 UTC 경계, `created_at >= start AND < start+1d`)에 작성된 게시글을 `member_id`별로 `count`해 읽고(`PostCountRow(Long memberId, long postCount)`), processor가 행을 통계 행으로 변환하며 `postCount == 0`이면 `null`을 반환해 건너뛰고, writer가 `INSERT ... ON CONFLICT (member_id, stat_date) DO UPDATE`로 upsert한다(재실행 멱등). SQL은 파라미터 바인딩만.
+- Step2 `purgeOldStatsStep`(tasklet): `stat_date < runDate - retentionDays` 행 삭제. `app.batch.retention-days`(기본 90, 1 이상).
+- 설정: `spring.main.web-application-type: none`, `spring.batch.job.enabled`는 CLI로 잡을 지정해 실행하도록 구성(`--spring.batch.job.name=memberPostStatsJob runDate=2026-11-25`). DB 접속 정보와 시크릿은 환경 변수(`POSTGRES_PASSWORD` 기본값 없음, `DB_URL`/`DB_USERNAME`), Batch 메타데이터 스키마 초기화 방식은 구현자가 PostgreSQL + Flyway 조합에서 검증해 선택(`spring.batch.jdbc.initialize-schema`)하고 README에 기록. `@EntityScan`/`@EnableJpaRepositories`/`scanBasePackages`는 api-rest와 같은 패턴(`config/PersistenceConfig`).
+- Spring Batch 6(Boot 4.2) API: `spring-boot-starter-batch`와 테스트 `spring-batch-test`의 정확한 아티팩트·패키지를 해석해 확인한다(`@EnableBatchProcessing` 필요 여부 포함).
+
+- [ ] **Step 1: Red.** 테스트: `runDateValidator_rejectsMissingAndMalformedRunDate`, `processor_skipsZeroCountAndMapsOthers`, `job_aggregatesPostsOfRunDateOnly`(runDate에 작성된 게시글 3건(회원 A 2건, B 1건)과 전날·다음날 게시글이 있을 때 통계 2행: A=2, B=1), `job_rerunForSameRunDateIsIdempotent`(같은 `runDate`에 새 `JobParameters`(예: 고유 `run.id`)로 두 번 실행해도 통계 행 수와 값이 변하지 않음, 중간에 게시글이 늘면 값이 갱신됨), `job_purgesStatsOlderThanRetention`(경계: 보존 기간 정확히 경계일은 유지, 그 이전은 삭제), `job_failsOnMalformedRunDateWithoutWritingStats`, `job_deletingMemberDoesNotBreakStats`(회원 삭제 후에도 FK 위반 없이 동작/통계 정리). Testcontainers PostgreSQL(`PostgresTestBase`)로 실제 DB, `JobLauncherTestUtils`/`JobOperatorTestUtils`(Batch 6 API 확인), 행 정리는 `@AfterEach`. Run: `./gradlew :batch:test` → Expected: FAIL.
+- [ ] **Step 2: Green.** 위 인터페이스대로 구현한다. 각 메서드 60줄 이하, 클래스 350줄 이하, getter/setter는 Lombok(`@Getter`) 또는 record.
+- [ ] **Step 3: Verify.** `./gradlew :batch:check` → PASS, `./gradlew :batch:bootJar` 성공, `./gradlew :batch:tasks --all`에 `jibDockerBuild` 표시(이미지 빌드는 Task 9). 루트 `./gradlew check` PASS.
+- [ ] **Step 4: Commit** `feat(batch): add member post stats batch job`.

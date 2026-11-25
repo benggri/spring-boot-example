@@ -17,6 +17,10 @@
 - JPA + QueryDSL (동적 검색, 페이징)
 - Swagger (OpenAPI)
 - PostgreSQL
+- Spring Batch: 배치 애플리케이션 예제를 `batch` 모듈로 제공한다.
+  - 예제 잡: 회원별 일일 게시글 통계 집계(chunk 스텝: reader → processor → writer)와 오래된 통계 정리(tasklet 스텝)
+  - 잡 파라미터 `runDate`(ISO 날짜) 검증, 재실행 시 멱등(upsert), 웹 서버 없이 실행(`web-application-type: none`)
+  - 같은 `core`(엔티티, Flyway)를 사용하고 Jib 이미지로 빌드한다.
 - Spring AOP: `core`의 서비스 계층에 적용한다.
   - 서비스 호출 로깅과 실행 시간 측정(임계값 초과 시 경고)
   - 쓰기 작업 감사 로그(`@Audited`): 행위자, 동작, 성공/실패
@@ -27,7 +31,7 @@
   - 서비스 호출 메트릭(AOP와 연계)을 커스텀 메트릭으로 제공한다.
   - docker-compose에 Prometheus(프로필 `monitoring`)와 scrape 설정을 제공한다.
 - Docker 이미지 빌드는 Jib(Gradle 플러그인)로 한다. Dockerfile은 작성하지 않는다.
-  - 대상: `api-rest`, `api-graphql`, `api-grpc` 각 앱
+  - 대상: `api-rest`, `api-graphql`, `api-grpc`, `batch` 각 앱
   - 시크릿(`JWT_SECRET`, DB 비밀번호)은 이미지에 넣지 않고 실행 시 환경 변수로 주입한다.
 
 - Lombok: getter/setter는 직접 작성하지 않고 Lombok(`@Getter`, 필요한 곳에만 `@Setter`)으로 생성한다. 기존 소스의 수작업 getter/setter는 제거한다.
@@ -49,6 +53,7 @@
   - `api-rest`: REST API + Swagger
   - `api-graphql`: GraphQL
   - `api-grpc`: gRPC
+  - `batch`: Spring Batch 예제
 - 컨트롤러, 리졸버, gRPC 서비스는 서비스 계층을 호출하는 얇은 어댑터로 둔다.
 - 도메인: `Member` 1:N `Post`.
 
