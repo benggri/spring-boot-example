@@ -55,7 +55,7 @@
 ## 개발 가이드
 
 - 패키지 구조: 기능별 폴더 안에서 목적에 따라 계층 폴더로 나눈다(단수형).
-  - `core`: `<기능>/{domain, repository, service, dto}` (예: `post/domain/Post`, `post/service/PostService`)
+  - `core`: `<기능>/{entity, repository, service, dto}` (예: `post/entity/Post`, `post/service/PostService`)
   - 파일이 적은 `security`, `aop`, `common`, `config`는 평평하게 둔다.
   - 어댑터 모듈(`api-*`)도 같은 방식(`controller`, `dto`, `config` 등)을 쓴다.
 

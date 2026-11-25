@@ -25,7 +25,7 @@
 - 모니터링: 각 api 앱은 Actuator를 별도 management 포트로 노출하고 `health`, `prometheus`만 노출한다(나머지 엔드포인트 비노출). 메트릭 태그는 저카디널리티(class, method, outcome)만 쓰고 인자·사용자 식별자는 태그로 쓰지 않는다.
 - 개발 방식은 Spec-driven + Subagent-driven. 요구사항 변경은 요구사항 → spec → 계획 순서로 문서를 먼저 갱신한다. `docs/ai-dlc/GUIDE.md`가 이를 설명한다.
 - getter/setter는 직접 작성하지 않고 Lombok(`@Getter`, 필요한 곳에만 `@Setter`)을 쓴다. 엔티티에는 `@Setter` 금지(상태 변경은 도메인 메서드). record에는 Lombok 불필요. 생성자 계열 Lombok 어노테이션은 쓰지 않는다.
-- 패키지 구조: 기능별 폴더 안에 단수형 계층 폴더 `domain`(엔티티·enum), `repository`, `service`, `dto`를 둔다(`core/<member|post>/...`). `security`·`aop`·`common`·`config`는 평평하게 둔다. 어댑터 모듈도 `controller`, `dto`, `config` 등 단수형 폴더를 쓴다.
+- 패키지 구조: 기능별 폴더 안에 단수형 계층 폴더 `entity`(엔티티·enum), `repository`, `service`, `dto`를 둔다(`core/<member|post>/...`). `security`·`aop`·`common`·`config`는 평평하게 둔다. 어댑터 모듈도 `controller`, `dto`, `config` 등 단수형 폴더를 쓴다.
 - 앱 모듈(`api-*`)은 `core`가 다른 패키지 트리라서 `@SpringBootApplication(scanBasePackages = "com.benggri.example")`와 `@EntityScan("com.benggri.example.core")`, `@EnableJpaRepositories("com.benggri.example.core")`로 `core`를 스캔해야 한다.
 - Docker 이미지는 Jib Gradle 플러그인으로만 빌드한다(Dockerfile 금지). 대상은 `api-rest`, `api-graphql`, `api-grpc`. `JWT_SECRET`·DB 비밀번호는 이미지에 포함하지 않고 실행 시 환경 변수로 주입한다.
 
@@ -53,7 +53,7 @@
 ```
 settings.gradle, build.gradle, gradle.properties, docker-compose.yml, .gitignore
 config/checkstyle/checkstyle.xml
-core/    src/main/java/com/benggri/example/core/{common,config,security,aop} 와 {member,post}/{domain,repository,service,dto}
+core/    src/main/java/com/benggri/example/core/{common,config,security,aop} 와 {member,post}/{entity,repository,service,dto}
          src/main/resources/db/migration/V1__init.sql
          src/test/java/...  (Testcontainers 지원: support/PostgresTestBase)
 monitoring/prometheus.yml
@@ -259,9 +259,9 @@ README.md (루트), CLAUDE.md
 
 ### Task 14: 패키지 구조 정리 — **Task 4 직후, Task 13 전에 실행**
 
-**Files:** Move(`git mv`) + package/import 수정: `core/.../member/{Member,Role}.java`→`member/domain/`, `MemberRepository`→`member/repository/`, `MemberService`→`member/service/`, `MemberResult`→`member/dto/`; `post/Post`→`post/domain/`, `PostRepository`·`PostQueryRepository`·`PostQueryRepositoryImpl`→`post/repository/`, `PostService`→`post/service/`, `PostResult`·`PostSearchCondition`→`post/dto/`. 테스트도 같은 패키지로 이동. `QueryDslConfig`는 `core/config`, `AuthUser`는 `core/security`, 예외 3종은 `core/common`에 그대로. Test: `PackageStructureTest`(신규) + 기존 테스트 전체.
+**Files:** Move(`git mv`) + package/import 수정: `core/.../member/{Member,Role}.java`→`member/entity/`, `MemberRepository`→`member/repository/`, `MemberService`→`member/service/`, `MemberResult`→`member/dto/`; `post/Post`→`post/entity/`, `PostRepository`·`PostQueryRepository`·`PostQueryRepositoryImpl`→`post/repository/`, `PostService`→`post/service/`, `PostResult`·`PostSearchCondition`→`post/dto/`. 테스트도 같은 패키지로 이동. `QueryDslConfig`는 `core/config`, `AuthUser`는 `core/security`, 예외 3종은 `core/common`에 그대로. Test: `PackageStructureTest`(신규) + 기존 테스트 전체.
 
-**Interfaces:** Produces: 이후 Task가 쓰는 정확한 FQN — `com.benggri.example.core.member.domain.{Member,Role}`, `...member.repository.MemberRepository`, `...member.service.MemberService`, `...member.dto.MemberResult`, `...post.domain.Post`(Q클래스 `QPost`도 `post.domain`), `...post.repository.{PostRepository,PostQueryRepository,PostQueryRepositoryImpl}`, `...post.service.PostService`, `...post.dto.{PostResult,PostSearchCondition}`. 메서드 시그니처는 변하지 않는다. 패키지가 달라져 접근이 막히는 `MemberResult.from`·`PostResult.from`은 `public`으로 바꾼다.
+**Interfaces:** Produces: 이후 Task가 쓰는 정확한 FQN — `com.benggri.example.core.member.entity.{Member,Role}`, `...member.repository.MemberRepository`, `...member.service.MemberService`, `...member.dto.MemberResult`, `...post.entity.Post`(Q클래스 `QPost`도 `post.entity`), `...post.repository.{PostRepository,PostQueryRepository,PostQueryRepositoryImpl}`, `...post.service.PostService`, `...post.dto.{PostResult,PostSearchCondition}`. 메서드 시그니처는 변하지 않는다. 패키지가 달라져 접근이 막히는 `MemberResult.from`·`PostResult.from`은 `public`으로 바꾼다.
 
 - [ ] **Step 1: Baseline.** Run: `./gradlew check` → PASS.
 - [ ] **Step 2: Red.** `PackageStructureTest`를 쓴다: 위 FQN 11개 각각에 `Class.forName(...)`이 성공해야 하고(`structure_hasExpectedClasses`), `core/src/main/java/.../member`와 `.../post` 직하위에는 `.java` 파일이 없어야 한다(`structure_featureFoldersContainOnlyLayerFolders`, `Files.list`로 확인, 테스트 작업 디렉터리 기준 경로는 `Path.of("src/main/java/com/benggri/example/core/post")`). Run: `./gradlew :core:test --tests '*PackageStructureTest'` → Expected: FAIL(`ClassNotFoundException`).
