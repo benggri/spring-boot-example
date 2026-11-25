@@ -1,0 +1,46 @@
+server:
+  port: 8090
+
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/example}
+    username: ${DB_USERNAME:example}
+    password: ${POSTGRES_PASSWORD}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+  graphql:
+    graphiql:
+      enabled: false
+
+app:
+  jwt:
+    secret: ${JWT_SECRET}
+    access-ttl: PT15M
+    refresh-ttl: P7D
+  aop:
+    slow-threshold-ms: 500
+  graphql:
+    max-query-depth: 10
+    max-root-fields: 10
+
+management:
+  server:
+    # separate port: never publish it; Prometheus scrapes it on the internal network only
+    port: 8082
+  endpoints:
+    web:
+      discovery:
+        # no /actuator links page: it would list the exposed endpoints to anyone who can reach the port
+        enabled: false
+      exposure:
+        include: health,prometheus
+  endpoint:
+    health:
+      show-details: never
+      show-components: never
+      probes:
+        enabled: false

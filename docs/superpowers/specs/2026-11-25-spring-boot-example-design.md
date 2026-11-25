@@ -24,13 +24,22 @@
 인증: **자체 발급 JWT 선택** (대안: OAuth2 Resource Server+IdP는 실행 부담, 세션은 gRPC와 부적합).
 
 ## 설계 (사용자가 정한 것)
-- 모듈: `core`, `api-rest`, `api-graphql`, `api-grpc`. 의존은 `api-*` → `core` 단방향.
+- 모듈: `core`, `api-rest`, `api-graphql`, `api-grpc`, `batch`. 의존은 `api-*`, `batch` → `core` 단방향.
 - 서비스는 `core`에, 컨트롤러/리졸버/gRPC 서비스는 얇은 어댑터.
 - 인증: 자체 발급 JWT(access/refresh), 역할 `USER`/`ADMIN`. 같은 토큰을 REST·GraphQL 헤더, gRPC 메타데이터에 사용.
 - 개발 가이드: 함수 60줄 이하, 클래스 350줄 이하, 한 함수 한 역할, 사람이 유지보수하는 관점.
 - TDD(사용자 요구): Red(실패 테스트 먼저, 실패 확인) → Green(최소 구현) → Refactor. 커밋은 Green에서만. 테스트 계층은 단위, 슬라이스, 통합(Testcontainers, gRPC in-process). 버그 수정도 재현 테스트부터. 구현 시 `superpowers:test-driven-development` 스킬을 따른다.
 - 시큐어 코딩: 시크릿 하드코딩 금지(환경 변수), SQL 인젝션·XSS 방어.
-- 컨테이너 이미지(사용자 요구): Jib Gradle 플러그인으로 빌드, Dockerfile 없음. 세 api 앱이 대상이며 시크릿은 이미지에 포함하지 않는다. 베이스 이미지(`eclipse-temurin:21-jre`)는 제 판단.
+- AOP(사용자 추가 요구): `core`에 `ServiceLoggingAspect`(서비스 호출 로깅 + 실행 시간, 임계값 `app.aop.slow-threshold-ms` 초과 시 WARN)와 `AuditAspect`(`@Audited("동작명")` 메서드의 행위자·결과 로깅). 인자 값은 기록하지 않는다(시크릿 유출 방지). 대상 구성은 제 판단.
+- Prometheus(사용자 추가 요구): 각 api 앱에 Actuator + `micrometer-registry-prometheus`. management 포트 분리, 노출은 `health`,`prometheus`만, 전용 `SecurityFilterChain`(`EndpointRequest`)으로 두 엔드포인트만 permitAll. `ServiceLoggingAspect`가 `app.service.invocation` Timer(태그: class, method, outcome — 저카디널리티)를 기록. docker-compose `monitoring` 프로필로 Prometheus 제공, Grafana는 범위 밖(제 판단). management 포트는 외부 비공개 전제를 README에 명시.
+- AI-DLC 가이드(사용자 추가 요구): `docs/ai-dlc/GUIDE.md`. 개발 방식은 Spec-driven + Subagent-driven(사용자 선호). AWS AI-DLC의 용어(Intent, Unit, Bolt, Inception/Construction/Operations)를 이 프로젝트의 산출물에 대응시킨 해석은 제 판단이며, 가이드에 "이 저장소의 해석"임을 명시한다.
+- OKF(사용자 요청, 유용할 경우): 확인 결과 Google Cloud가 공개한 마크다운+YAML frontmatter 기반 지식 번들 형식(현재 v0.3, 1.0 이전이라 minor에서도 호환 깨짐 가능). 이 저장소에서는 **선택 사항**으로 가이드에 소개만 한다. 기존 CLAUDE.md·spec·계획을 OKF로 바꾸지 않고, 번들(`docs/knowledge/`)도 만들지 않는다(YAGNI, 제 판단).
+- graphify 비교(사용자 요청): 가이드 OKF 절에서 graphify(설치된 스킬, 코드·문서 → 지식 그래프 자동 생성·질의)와 비교한다. 보완 관계로 서술하고, 구현 후 `/graphify` 실행은 선택 안내로만 둔다(제 판단). 정확도·비용은 미검증으로 명시.
+- Lombok(사용자 추가 요구): getter/setter는 Lombok으로 생성하고 수작업 코드는 제거한다. 엔티티에는 `@Getter`만 쓰고 `@Setter`는 쓰지 않는다(불변식 보호, 제 판단 — 도메인 메서드로만 변경). 생성자 계열 어노테이션은 요청 범위 밖이라 쓰지 않는다(YAGNI). QueryDSL apt와의 annotationProcessor 순서(Lombok 먼저)는 구현 시 검증.
+- 패키지 구조(사용자 승인): 기능 우선 + 계층 하위 폴더(단수형). `core/<기능>/{entity, repository, service, dto}`, `security`·`aop`·`common`·`config`는 평평. 엔티티는 `entity`, 전달용 레코드는 `dto`로 구분(제안·제 판단). 결과로 `Result.from` 등 package-private 접근은 public으로 바뀐다.
+- Batch(사용자 추가 요구): `batch` 모듈, Spring Batch(Boot 4는 Spring Batch 6 계열). 예제 잡 `memberPostStatsJob`(제 판단): Step1 chunk — reader가 `runDate`에 작성된 게시글을 회원별로 집계(`member_id`, `post_count`) → processor가 DTO를 통계 행으로 변환 → writer가 `member_post_stats`에 upsert(`ON CONFLICT`, 멱등). Step2 tasklet — 보존 기간(`app.batch.retention-days`, 기본 90) 지난 통계 삭제. 통계 테이블은 `core` Flyway `V2` 테이블만 두고, 배치는 JDBC로 접근한다(엔티티 없음). 웹 서버 없음, 잡 실행은 CLI 인자(`--spring.batch.job.name=...`, `runDate=...`). 배치 메타데이터 테이블 초기화 방식과 Batch 6 API 세부는 구현자가 검증해 결정. Prometheus 메트릭은 단명 프로세스라 범위 밖(제 판단). 컨테이너 이미지 대상에 `batch` 포함.
+- 회원 조회 제한(사용자 결정): `MemberService.get(AuthUser actor, Long id)`는 본인 또는 ADMIN만 허용하며 타인은 `ForbiddenException`(존재 확인 후 권한 확인, 기존 규칙과 동일). `list(Pageable)`는 어댑터에 노출하지 않거나 ADMIN 전용으로만 노출한다(제 판단: 이메일 목록 노출 방지).
+- 컨테이너 이미지(사용자 요구): Jib Gradle 플러그인으로 빌드, Dockerfile 없음. 세 api 앱과 `batch` 앱이 대상이며 시크릿은 이미지에 포함하지 않는다. 베이스 이미지(`eclipse-temurin:21-jre`)는 제 판단.
 - AI 스킬: superpowers(brainstorming, writing-plans, subagent-driven-development), claude-md-management(완료 후 CLAUDE.md 갱신), `.claude/skills/java-springboot`.
 
 ## 제 판단 (사용자가 확인·수정 가능)
@@ -39,7 +48,7 @@
 - 테스트: 모듈별 슬라이스 + 통합 테스트(테스트도 예제). 보안 테스트 포함.
 - 문서: 루트 README + 모듈별 README("왜 이렇게 했는가"), 완료 후 CLAUDE.md 갱신.
 - 패키지 루트: `com.benggri.example` (임의 결정).
-- 라이브러리 선택(빌더 판단): Swagger=springdoc-openapi, GraphQL=spring-graphql, gRPC=spring-grpc 스타터, QueryDSL=OpenFeign 포크 또는 Boot 4 호환 버전.
+- 라이브러리 선택(빌더 판단): Swagger=springdoc-openapi, GraphQL=spring-graphql, gRPC=Spring Boot 내장 `spring-boot-starter-grpc-server`(Task 1 검증: 별도 spring-grpc 스타터는 Boot 4.2 BOM에서 해석되지 않음), QueryDSL=OpenFeign 포크 또는 Boot 4 호환 버전.
 - Swagger/QueryDSL은 REST 모듈 중심, 인증은 세 모듈 모두 적용.
 
 ## 빌더에게 남기는 것 / 리스크

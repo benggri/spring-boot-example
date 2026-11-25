@@ -17,9 +17,26 @@
 - JPA + QueryDSL (동적 검색, 페이징)
 - Swagger (OpenAPI)
 - PostgreSQL
+- Spring Batch: 배치 애플리케이션 예제를 `batch` 모듈로 제공한다.
+  - 예제 잡: 회원별 일일 게시글 통계 집계(chunk 스텝: reader → processor → writer)와 오래된 통계 정리(tasklet 스텝)
+  - 잡 파라미터 `runDate`(ISO 날짜) 검증, 재실행 시 멱등(upsert), 웹 서버 없이 실행(`web-application-type: none`)
+  - 같은 `core`(엔티티, Flyway)를 사용하고 Jib 이미지로 빌드한다.
+- Spring AOP: `core`의 서비스 계층에 적용한다.
+  - 서비스 호출 로깅과 실행 시간 측정(임계값 초과 시 경고)
+  - 쓰기 작업 감사 로그(`@Audited`): 행위자, 동작, 성공/실패
+  - 인자 값(비밀번호 등)은 로그에 남기지 않는다.
+- Prometheus 모니터링: Spring Boot Actuator + Micrometer
+  - 세 api 앱이 `/actuator/prometheus`로 메트릭을 노출한다.
+  - 관리(management) 포트를 분리하고 `health`, `prometheus`만 노출한다. 그 외 actuator 엔드포인트는 비노출.
+  - 서비스 호출 메트릭(AOP와 연계)을 커스텀 메트릭으로 제공한다.
+  - docker-compose에 Prometheus(프로필 `monitoring`)와 scrape 설정을 제공한다.
 - Docker 이미지 빌드는 Jib(Gradle 플러그인)로 한다. Dockerfile은 작성하지 않는다.
-  - 대상: `api-rest`, `api-graphql`, `api-grpc` 각 앱
+  - 대상: `api-rest`, `api-graphql`, `api-grpc`, `batch` 각 앱
   - 시크릿(`JWT_SECRET`, DB 비밀번호)은 이미지에 넣지 않고 실행 시 환경 변수로 주입한다.
+
+- Lombok: getter/setter는 직접 작성하지 않고 Lombok(`@Getter`, 필요한 곳에만 `@Setter`)으로 생성한다. 기존 소스의 수작업 getter/setter는 제거한다.
+  - 엔티티에는 `@Setter`를 쓰지 않는다. 상태 변경은 도메인 메서드(`rename`, `edit`)로만 한다.
+  - 값 전달용은 `record`를 우선하고, 레코드는 Lombok이 필요 없다.
 
 ## 범위
 
@@ -31,20 +48,27 @@
 
 ## 구조 (확정)
 
-- Gradle 멀티모듈. 의존 방향은 `api-*` → `core` 단방향이다.
+- Gradle 멀티모듈. 의존 방향은 `api-*`, `batch` → `core` 단방향이다.
   - `core`: 엔티티, JPA, QueryDSL, 서비스, 보안 공통
   - `api-rest`: REST API + Swagger
   - `api-graphql`: GraphQL
   - `api-grpc`: gRPC
+  - `batch`: Spring Batch 예제
 - 컨트롤러, 리졸버, gRPC 서비스는 서비스 계층을 호출하는 얇은 어댑터로 둔다.
 - 도메인: `Member` 1:N `Post`.
 
 ## 개발 가이드
 
+- 패키지 구조: 기능별 폴더 안에서 목적에 따라 계층 폴더로 나눈다(단수형).
+  - `core`: `<기능>/{entity, repository, service, dto}` (예: `post/entity/Post`, `post/service/PostService`)
+  - 파일이 적은 `security`, `aop`, `common`, `config`는 평평하게 둔다.
+  - 어댑터 모듈(`api-*`)도 같은 방식(`controller`, `dto`, `config` 등)을 쓴다.
+
 - 하나의 함수는 하나의 역할
 - 하나의 함수는 60라인 이하, 초과 시 분리
 - 하나의 클래스는 350라인 이하, 초과 시 분리
 - 사람이 유지보수하는 관점에서 개발
+- 접근 제어: 회원 정보(이메일 포함)의 조회·수정·삭제는 본인 또는 `ADMIN`만 가능하다. 소유자 규칙은 `core` 서비스에서 한 번만 구현하고 모든 어댑터가 따른다.
 - 모듈별 README에 "왜 이렇게 했는가"를 기록
 - 테스트도 예제로 취급 (슬라이스 테스트 + 통합 테스트)
 - TDD 필수
@@ -55,6 +79,14 @@
   - 테스트 계층: 단위(서비스, JWT), 슬라이스(`@DataJpaTest`, `@WebMvcTest`, GraphQL 테스터), 통합(Testcontainers PostgreSQL, gRPC in-process).
   - 버그 수정도 재현하는 실패 테스트부터 작성한다.
 - 시큐어 코딩: API 키·비밀번호·JWT 시크릿 하드코딩 금지(환경 변수 사용), SQL 인젝션·XSS 방어
+
+## 개발 방식 (AI-DLC)
+
+- 선호 방식: Spec-driven + Subagent-driven 개발.
+  - Spec-driven: 요구사항 → 브레인스토밍 → 설계 문서(spec) 승인 → 구현 계획 → 구현. 요구사항이 바뀌면 코드보다 문서(요구사항, spec, 계획)를 먼저 고친다.
+  - Subagent-driven: 작업(Task)마다 새 서브에이전트가 구현하고, 별도 리뷰어가 검토하며, 마지막에 전체 브랜치를 리뷰한다.
+- AI-DLC(AI-Driven Development Life Cycle) 가이드 문서를 `docs/ai-dlc/GUIDE.md`로 제공한다. 이 프로젝트의 흐름을 Inception, Construction, Operations 단계에 대응시켜 설명한다.
+- 가이드에 Google의 OKF(Open Knowledge Format)를 AI 코딩 에이전트용 지식 공유 방식으로 소개한다(선택 사항, 1.0 이전 사양임을 명시). 같은 절에서 graphify(코드·문서를 지식 그래프로 자동 생성)와 비교해 어떤 상황에 무엇이 유리한지 설명한다.
 
 ## AI 스킬
 

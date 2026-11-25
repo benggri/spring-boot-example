@@ -1,0 +1,38 @@
+plugins {
+    id 'org.springframework.boot'
+    id 'com.google.protobuf' version "${protobufPluginVersion}"
+}
+
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-grpc-server'
+    // HTTP only so the actuator can serve health/prometheus (no Spring Security web chain here)
+    implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'io.micrometer:micrometer-registry-prometheus'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-grpc-server-test'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+protobuf {
+    protoc {
+        artifact = "com.google.protobuf:protoc:${protocVersion}"
+    }
+    plugins {
+        grpc {
+            artifact = "io.grpc:protoc-gen-grpc-java:${grpcVersion}"
+        }
+    }
+    generateProtoTasks {
+        all().configureEach {
+            plugins {
+                grpc {}
+            }
+        }
+    }
+}
+
+// generated protobuf/gRPC sources (build/generated) are not ours to style-check
+tasks.named('checkstyleMain') {
+    exclude '**/com/benggri/example/grpc/proto/**'
+}

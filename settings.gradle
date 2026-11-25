@@ -1,0 +1,3 @@
+rootProject.name = 'spring-boot-example'
+
+include 'core', 'api-rest', 'api-graphql', 'api-grpc', 'batch'

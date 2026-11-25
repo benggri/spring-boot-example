@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+package example.v1;
+
+option java_multiple_files = true;
+option java_package = "com.benggri.example.grpc.proto";
+
+// There is deliberately no list RPC: listing members is admin-only and not exposed over gRPC.
+service MemberService {
+  rpc Register(RegisterRequest) returns (MemberResponse);
+  rpc Get(GetMemberRequest) returns (MemberResponse);
+  rpc Update(UpdateMemberRequest) returns (MemberResponse);
+  rpc Delete(DeleteMemberRequest) returns (DeleteMemberResponse);
+}
+
+message RegisterRequest {
+  string email = 1;
+  string password = 2;
+  string name = 3;
+}
+
+message GetMemberRequest {
+  int64 id = 1;
+}
+
+message UpdateMemberRequest {
+  int64 id = 1;
+  string name = 2;
+}
+
+message DeleteMemberRequest {
+  int64 id = 1;
+}
+
+message DeleteMemberResponse {}
+
+// Carries the email: returned only to the owner or an admin (enforced by core).
+message MemberResponse {
+  int64 id = 1;
+  string email = 2;
+  string name = 3;
+  string role = 4;
+}

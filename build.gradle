@@ -1,0 +1,70 @@
+plugins {
+    id 'org.springframework.boot' version "${springBootVersion}" apply false
+    id 'io.spring.dependency-management' version '1.1.7' apply false
+    id 'com.google.cloud.tools.jib' version "${jibPluginVersion}" apply false
+}
+
+subprojects {
+    apply plugin: 'java'
+    apply plugin: 'checkstyle'
+    apply plugin: 'io.spring.dependency-management'
+
+    group = 'com.benggri.example'
+    version = '0.0.1-SNAPSHOT'
+
+    java {
+        toolchain {
+            languageVersion = JavaLanguageVersion.of(21)
+        }
+    }
+
+    repositories {
+        mavenCentral()
+    }
+
+    dependencyManagement {
+        imports {
+            mavenBom "org.springframework.boot:spring-boot-dependencies:${springBootVersion}"
+        }
+    }
+
+    checkstyle {
+        toolVersion = '10.21.4'
+        configFile = rootProject.file('config/checkstyle/checkstyle.xml')
+        maxWarnings = 0
+    }
+
+    dependencies {
+        compileOnly 'org.projectlombok:lombok'
+        annotationProcessor 'org.projectlombok:lombok'
+        testCompileOnly 'org.projectlombok:lombok'
+        testAnnotationProcessor 'org.projectlombok:lombok'
+    }
+
+    tasks.withType(Test).configureEach {
+        useJUnitPlatform()
+    }
+
+    if (name.startsWith('api-') || name == 'batch') {
+        apply plugin: 'com.google.cloud.tools.jib'
+        dependencies {
+            implementation project(':core')
+            testImplementation testFixtures(project(':core'))
+        }
+        // Image config only. No secrets/env here: pass JWT_SECRET, POSTGRES_PASSWORD, DB_URL at `docker run`.
+        // Management/actuator ports (8081, 8082) are deliberately not exposed; api-grpc's 8083 is its only HTTP port.
+        // container.ports becomes EXPOSE metadata only: it does NOT publish anything on the host. Publishing
+        // happens only with `docker run -p`; never publish an actuator port (8083 for api-grpc) - it has no auth.
+        def appPorts = [
+                'api-rest'   : ['8080'],
+                'api-graphql': ['8090'],
+                'api-grpc'   : ['9190', '8083'],
+                'batch'      : []
+        ]
+        jib {
+            from.image = 'eclipse-temurin:21-jre'
+            to.image = "benggri/spring-boot-example-${project.name}:${project.version}"
+            container.ports = appPorts[project.name]
+        }
+    }
+}

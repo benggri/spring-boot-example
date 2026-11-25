@@ -1,0 +1,10 @@
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: validate
+app:
+  jwt:
+    # generated per run; never a committed secret
+    secret: ${random.uuid}${random.uuid}
+    access-ttl: 15m
+    refresh-ttl: 7d
