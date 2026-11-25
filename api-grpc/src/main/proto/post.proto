@@ -1,0 +1,65 @@
+syntax = "proto3";
+
+package example.v1;
+
+option java_multiple_files = true;
+option java_package = "com.benggri.example.grpc.proto";
+
+service PostService {
+  rpc Create(CreatePostRequest) returns (PostResponse);
+  rpc Get(GetPostRequest) returns (PostResponse);
+  rpc Search(SearchPostsRequest) returns (SearchPostsResponse);
+  rpc Update(UpdatePostRequest) returns (PostResponse);
+  rpc Delete(DeletePostRequest) returns (DeletePostResponse);
+}
+
+message CreatePostRequest {
+  string title = 1;
+  string content = 2;
+}
+
+message GetPostRequest {
+  int64 id = 1;
+}
+
+message UpdatePostRequest {
+  int64 id = 1;
+  string title = 2;
+  string content = 3;
+}
+
+message DeletePostRequest {
+  int64 id = 1;
+}
+
+message DeletePostResponse {}
+
+// proto3 zero defaults: size 0 = default 20, page 0 = first page, member_id unset = no filter,
+// blank keyword = no keyword. Negative page/size are rejected; size above 100 is clamped by the service.
+message SearchPostsRequest {
+  string keyword = 1;
+  optional int64 member_id = 2;
+  int32 page = 3;
+  int32 size = 4;
+}
+
+message SearchPostsResponse {
+  repeated PostResponse items = 1;
+  int32 page = 2;
+  int32 size = 3;
+  int64 total = 4;
+}
+
+// Public author view: never email or role (those are readable only by the owner or an admin).
+message Author {
+  int64 id = 1;
+  string name = 2;
+}
+
+message PostResponse {
+  int64 id = 1;
+  string title = 2;
+  string content = 3;
+  string created_at = 4; // ISO-8601 instant
+  Author author = 5;
+}
