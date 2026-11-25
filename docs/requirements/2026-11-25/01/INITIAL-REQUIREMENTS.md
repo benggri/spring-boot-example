@@ -54,6 +54,11 @@
 
 ## 개발 가이드
 
+- 패키지 구조: 기능별 폴더 안에서 목적에 따라 계층 폴더로 나눈다(단수형).
+  - `core`: `<기능>/{domain, repository, service, dto}` (예: `post/domain/Post`, `post/service/PostService`)
+  - 파일이 적은 `security`, `aop`, `common`, `config`는 평평하게 둔다.
+  - 어댑터 모듈(`api-*`)도 같은 방식(`controller`, `dto`, `config` 등)을 쓴다.
+
 - 하나의 함수는 하나의 역할
 - 하나의 함수는 60라인 이하, 초과 시 분리
 - 하나의 클래스는 350라인 이하, 초과 시 분리
