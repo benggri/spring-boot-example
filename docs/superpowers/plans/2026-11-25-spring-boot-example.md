@@ -183,7 +183,7 @@ README.md (루트), CLAUDE.md
 
 **Files:** Create/Modify 루트 `README.md`, 각 모듈 `README.md` 보강, `CLAUDE.md`(`claude-md-management:revise-claude-md` 사용). Test: 없음(문서). 전체 검증 명령 실행.
 
-- [ ] **Step 1:** 루트 README에 모듈 지도, AI-DLC 가이드 링크(`docs/ai-dlc/GUIDE.md`), 모니터링(Prometheus 실행·메트릭 목록), AOP 로그 읽는 법, 실행 순서(`docker compose up -d` → `JWT_SECRET` 설정 → `bootRun`), 세 프로토콜 호출 예제(curl, GraphQL 쿼리, grpcurl), TDD 워크플로 요약, 모듈을 가져가는 법을 쓴다.
+- [ ] **Step 1:** 루트 README에 모듈 지도, AI-DLC 가이드 링크(`docs/ai-dlc/GUIDE.md`), 모니터링(Prometheus 실행·메트릭 목록), AOP 로그 읽는 법, 실행 순서(`cp .env.example .env` → `JWT_SECRET` 입력 → `docker compose up -d` → `bootRun`), 세 프로토콜 호출 예제(curl, GraphQL 쿼리, grpcurl), TDD 워크플로 요약, 모듈을 가져가는 법을 쓴다.
 - [ ] **Step 2: Verify.** Run: `./gradlew clean check` → Expected: BUILD SUCCESSFUL(전 모듈 테스트, Checkstyle 위반 0).
 - [ ] **Step 3: 시크릿 점검.** Run: `grep -rniE "(password|secret|apikey)\s*[:=]\s*[\"'][^$]" --include=*.java --include=*.yml --include=*.gradle . | grep -v src/test` → Expected: 출력 없음.
 - [ ] **Step 3b: Jib 이미지.** 세 api 모듈에 Jib를 설정한다(`from.image=eclipse-temurin:21-jre`, `to.image=benggri/spring-boot-example-<module>:${version}`, 컨테이너 포트 노출, `environment`에는 시크릿 넣지 않음). 공통 설정은 루트 `build.gradle`의 `subprojects` 블록에서 `api-*`에만 적용한다. Run: `./gradlew :api-rest:jibDockerBuild` 후 `docker run --rm -e JWT_SECRET=<32바이트 이상 임의값> -e SPRING_DATASOURCE_URL=... <image>`로 기동 확인, `docker history <image>`와 `docker inspect`에서 시크릿 문자열이 없는지 확인한다. Expected: 세 이미지 모두 빌드·기동 성공, 이미지에 시크릿 없음. 루트 README에 이미지 빌드·실행법을 추가한다.
