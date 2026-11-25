@@ -48,7 +48,7 @@
 
 ## 구조 (확정)
 
-- Gradle 멀티모듈. 의존 방향은 `api-*` → `core` 단방향이다.
+- Gradle 멀티모듈. 의존 방향은 `api-*`, `batch` → `core` 단방향이다.
   - `core`: 엔티티, JPA, QueryDSL, 서비스, 보안 공통
   - `api-rest`: REST API + Swagger
   - `api-graphql`: GraphQL
