@@ -1,0 +1,174 @@
+package com.benggri.example.graphql;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import com.benggri.example.core.member.repository.MemberRepository;
+import com.benggri.example.core.post.repository.PostRepository;
+import com.benggri.example.core.support.PostgresTestBase;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.util.List;
+import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.web.server.LocalManagementPort;
+import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+
+/** Real HTTP on both ports: the management port serves only health and prometheus. */
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+class ManagementEndpointsTest extends PostgresTestBase {
+
+    private static final String PASSWORD = "password-" + UUID.randomUUID();
+    private static final HttpClient HTTP = HttpClient.newHttpClient();
+
+    @LocalServerPort
+    private int appPort;
+
+    @LocalManagementPort
+    private int managementPort;
+
+    @Autowired
+    private PostRepository postRepository;
+
+    @Autowired
+    private MemberRepository memberRepository;
+
+    @DynamicPropertySource
+    static void jwtProperties(DynamicPropertyRegistry registry) {
+        TestSecrets.register(registry);
+    }
+
+    @AfterEach
+    void cleanUp() {
+        postRepository.deleteAll();
+        memberRepository.deleteAll();
+    }
+
+    @Test
+    void prometheus_returnsMetricsOnManagementPort() throws Exception {
+        HttpResponse<String> res = get(managementPort, "/actuator/prometheus", null);
+
+        assertThat(res.statusCode()).isEqualTo(200);
+        assertThat(res.headers().firstValue("Content-Type").orElse("")).startsWith("text/plain");
+        assertThat(res.body()).contains("jvm_memory_used_bytes");
+    }
+
+    @Test
+    void prometheus_notServedOnMainPort() throws Exception {
+        assertThat(get(appPort, "/actuator/prometheus", null).statusCode()).isNotEqualTo(200);
+        assertThat(get(appPort, "/actuator/health", null).statusCode()).isNotEqualTo(200);
+    }
+
+    @Test
+    void nonExposedActuatorEndpointsAreNotAvailable() throws Exception {
+        for (String name : List.of("env", "beans", "metrics", "info", "loggers", "heapdump", "")) {
+            assertThat(get(managementPort, "/actuator/" + name, null).statusCode())
+                    .as("management /actuator/%s", name).isNotEqualTo(200);
+            assertThat(get(appPort, "/actuator/" + name, null).statusCode())
+                    .as("main /actuator/%s", name).isNotEqualTo(200);
+        }
+    }
+
+    @Test
+    void health_isUpWithoutDetails() throws Exception {
+        HttpResponse<String> res = get(managementPort, "/actuator/health", null);
+
+        assertThat(res.statusCode()).isEqualTo(200);
+        assertThat(res.body().replaceAll("\\s", "")).isEqualTo("{\"status\":\"UP\"}");
+    }
+
+    @Test
+    void managementEndpoints_requireNoToken_butMainApiStillDoes() throws Exception {
+        assertThat(get(managementPort, "/actuator/prometheus", null).statusCode()).isEqualTo(200);
+        assertThat(get(managementPort, "/actuator/health", null).statusCode()).isEqualTo(200);
+        String anonymous = post("{\"query\":\"query{ post(id:\\\"1\\\"){ id } }\"}").body();
+        assertThat(anonymous).contains("UNAUTHENTICATED");
+    }
+
+    @Test
+    void serviceCall_recordsInvocationTimer() throws Exception {
+        String email = "u-" + UUID.randomUUID() + "@example.com";
+        assertThat(register(email).body()).doesNotContain("\"errors\"");
+
+        assertThat(timerCount("MemberService", "register", "success")).isGreaterThanOrEqualTo(1);
+    }
+
+    @Test
+    void failedCall_recordsFailureOutcome() throws Exception {
+        String email = "u-" + UUID.randomUUID() + "@example.com";
+        assertThat(register(email).body()).doesNotContain("\"errors\"");
+        assertThat(register(email).body()).contains("\"errors\"");
+
+        assertThat(timerCount("MemberService", "register", "failure")).isGreaterThanOrEqualTo(1);
+    }
+
+    @Test
+    void metrics_neverContainPasswordOrEmail() throws Exception {
+        String email = "u-" + UUID.randomUUID() + "@example.com";
+        register(email);
+        HttpResponse<String> login = post(gql("mutation($i: LoginInput!) { login(input: $i)"
+                + " { accessToken } }", json("email", email, "password", PASSWORD)));
+        assertThat(login.body()).doesNotContain("\"errors\"");
+        String token = login.body().replaceAll(".*\"accessToken\":\"([^\"]+)\".*", "$1");
+
+        String metrics = get(managementPort, "/actuator/prometheus", null).body();
+
+        assertThat(metrics).doesNotContain(email).doesNotContain(PASSWORD).doesNotContain(token)
+                .doesNotContain("eyJ");
+    }
+
+    private double timerCount(String clazz, String method, String outcome) throws Exception {
+        String body = get(managementPort, "/actuator/prometheus", null).body();
+        Pattern line = Pattern.compile("^app_service_invocation_seconds_count\\{([^}]*)}\\s+(\\S+)$",
+                Pattern.MULTILINE);
+        Matcher m = line.matcher(body);
+        while (m.find()) {
+            String labels = m.group(1);
+            if (labels.contains("class=\"" + clazz + "\"") && labels.contains("method=\"" + method + "\"")
+                    && labels.contains("outcome=\"" + outcome + "\"")) {
+                return Double.parseDouble(m.group(2));
+            }
+        }
+        return 0;
+    }
+
+    private HttpResponse<String> register(String email) throws Exception {
+        return post(gql("mutation($i: RegisterInput!) { register(input: $i) { id } }",
+                json("email", email, "password", PASSWORD, "name", "Tester")));
+    }
+
+    private static String gql(String query, String variablesInput) {
+        return "{\"query\":\"" + query.replace("\"", "\\\"") + "\",\"variables\":{\"i\":" + variablesInput + "}}";
+    }
+
+    private HttpResponse<String> post(String body) throws Exception {
+        HttpRequest req = HttpRequest.newBuilder(URI.create("http://localhost:" + appPort + "/graphql"))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(body)).build();
+        return HTTP.send(req, HttpResponse.BodyHandlers.ofString());
+    }
+
+    private static HttpResponse<String> get(int port, String path, String bearer) throws Exception {
+        HttpRequest.Builder req = HttpRequest.newBuilder(URI.create("http://localhost:" + port + path));
+        if (bearer != null) {
+            req.header("Authorization", "Bearer " + bearer);
+        }
+        return HTTP.send(req.build(), HttpResponse.BodyHandlers.ofString());
+    }
+
+    private static String json(String... kv) {
+        StringBuilder sb = new StringBuilder("{");
+        for (int i = 0; i < kv.length; i += 2) {
+            sb.append(i > 0 ? "," : "").append('"').append(kv[i]).append("\":\"").append(kv[i + 1]).append('"');
+        }
+        return sb.append('}').toString();
+    }
+}
