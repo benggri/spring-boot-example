@@ -51,5 +51,18 @@ subprojects {
             implementation project(':core')
             testImplementation testFixtures(project(':core'))
         }
+        // Image config only. No secrets/env here: pass JWT_SECRET, POSTGRES_PASSWORD, DB_URL at `docker run`.
+        // Management/actuator ports (8081, 8082) are deliberately not exposed; api-grpc's 8083 is its only HTTP port.
+        def appPorts = [
+                'api-rest'   : ['8080'],
+                'api-graphql': ['8090'],
+                'api-grpc'   : ['9190', '8083'],
+                'batch'      : []
+        ]
+        jib {
+            from.image = 'eclipse-temurin:21-jre'
+            to.image = "benggri/spring-boot-example-${project.name}:${project.version}"
+            container.ports = appPorts[project.name]
+        }
     }
 }

@@ -18,7 +18,7 @@ gRPC + JWT(메타데이터) 어댑터 모듈입니다. 비즈니스 규칙(소�
 - **리플렉션은 기본 꺼짐**: 서비스 목록을 노출하지 않기 위해 `spring.grpc.server.reflection.enabled=false` 입니다. 로컬 grpcurl 편의를 위해 `SPRING_GRPC_SERVER_REFLECTION_ENABLED=true` 로 켜거나 `-proto` 옵션을 쓰세요.
 - **TCP 검증**: `GrpcNettyTransportTest` 가 실제 Netty 서버(무작위 포트, 평문)로 토큰 없는 호출 거부, 로그인 후 호출, 256KB 초과 메시지의 `RESOURCE_EXHAUSTED` 를 확인합니다. 그 외 테스트는 in-process 전송입니다.
 - **헬스 서비스**: Boot 가 등록하는 `grpc.health.v1.Health` 도 전역 인터셉터 대상이라 JWT 가 필요합니다. 프로브용으로 열려면 `PUBLIC_METHODS` 를 의도적으로 늘리고 테스트도 갱신하세요.
-- **웹 서버 없음**: `spring.main.web-application-type: none`. (액추에이터 HTTP 포트는 이후 작업에서 추가합니다.)
+- **HTTP 는 actuator 전용**: 서블릿 컨테이너는 actuator(`server.port: 8083`)만 서비스합니다. 자세한 내용은 아래 "모니터링" 절을 보세요.
 
 ## 상태 코드
 
