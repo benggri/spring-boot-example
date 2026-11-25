@@ -9,6 +9,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
 import org.springframework.security.authentication.TestingAuthenticationToken;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
 
@@ -39,5 +40,21 @@ class CurrentUserTest {
         SecurityContextHolder.getContext().setAuthentication(new TestingAuthenticationToken("anonymous", null, "ROLE_X"));
 
         assertThatThrownBy(CurrentUser::get).isInstanceOf(AuthenticationCredentialsNotFoundException.class);
+    }
+
+    @Test
+    void currentUser_jwtWithoutRoleThrowsAuthenticationException() {
+        Jwt jwt = Jwt.withTokenValue("token").header("alg", "HS256").subject("7").claim("typ", "access").build();
+        SecurityContextHolder.getContext().setAuthentication(new TestingAuthenticationToken(jwt, null, "ROLE_X"));
+
+        assertThatThrownBy(CurrentUser::get).isInstanceOf(AuthenticationException.class);
+    }
+
+    @Test
+    void currentUser_jwtWithNonNumericSubThrowsAuthenticationException() {
+        Jwt jwt = Jwt.withTokenValue("token").header("alg", "HS256").subject("abc").claim("role", "USER").build();
+        SecurityContextHolder.getContext().setAuthentication(new TestingAuthenticationToken(jwt, null, "ROLE_X"));
+
+        assertThatThrownBy(CurrentUser::get).isInstanceOf(AuthenticationException.class);
     }
 }

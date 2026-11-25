@@ -82,12 +82,20 @@ public class JwtProvider {
     private AuthUser parse(JwtDecoder decoder, String token) {
         try {
             Jwt jwt = decoder.decode(token);
-            return new AuthUser(Long.valueOf(jwt.getSubject()),
-                    Role.valueOf(jwt.getClaimAsString(CLAIM_ROLE)));
+            return toAuthUser(jwt);
         } catch (JwtException | IllegalArgumentException e) {
             // never echo the token or the underlying parser text that could quote it
             throw new InvalidTokenException("Invalid token", e);
         }
+    }
+
+    /** Maps verified claims to the caller; throws IllegalArgumentException for a missing or malformed sub/role. */
+    static AuthUser toAuthUser(Jwt jwt) {
+        String role = jwt.getClaimAsString(CLAIM_ROLE);
+        if (jwt.getSubject() == null || jwt.getSubject().isBlank() || role == null || role.isBlank()) {
+            throw new IllegalArgumentException("Token lacks subject or role");
+        }
+        return new AuthUser(Long.valueOf(jwt.getSubject()), Role.valueOf(role));
     }
 
     private JwtDecoder decoder(String expectedType) {
@@ -97,7 +105,7 @@ public class JwtProvider {
         JwtTimestampValidator timestamps = new JwtTimestampValidator(Duration.ZERO);
         timestamps.setClock(clock);
         timestamps.setAllowEmptyExpiryClaim(false);
-        decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(timestamps, typeValidator(expectedType)));
+        decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(timestamps, typeValidator(expectedType), identityValidator()));
         return decoder;
     }
 
@@ -106,5 +114,17 @@ public class JwtProvider {
         return jwt -> expectedType.equals(jwt.getClaimAsString(CLAIM_TYPE))
                 ? OAuth2TokenValidatorResult.success()
                 : OAuth2TokenValidatorResult.failure(error);
+    }
+
+    private static OAuth2TokenValidator<Jwt> identityValidator() {
+        OAuth2Error error = new OAuth2Error("invalid_token", "Token lacks subject or role", null);
+        return jwt -> {
+            try {
+                toAuthUser(jwt);
+                return OAuth2TokenValidatorResult.success();
+            } catch (IllegalArgumentException e) {
+                return OAuth2TokenValidatorResult.failure(error);
+            }
+        };
     }
 }

@@ -12,7 +12,11 @@ import java.time.Instant;
 import java.util.Base64;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
+import org.springframework.security.oauth2.jwt.JwsHeader;
+import org.springframework.security.oauth2.jwt.JwtClaimsSet;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.security.oauth2.jwt.JwtException;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -129,6 +133,42 @@ class JwtProviderTest {
     @Test
     void parseAccess_garbageThrows() {
         assertThatThrownBy(() -> provider.parseAccess("not-a-jwt")).isInstanceOf(InvalidTokenException.class);
+    }
+
+    @Test
+    void parseAccess_missingRoleClaimThrowsInvalidToken() {
+        String token = signed(JwtClaimsSet.builder().subject("42").claim("typ", "access"));
+
+        assertThatThrownBy(() -> provider.parseAccess(token)).isInstanceOf(InvalidTokenException.class);
+    }
+
+    @Test
+    void accessDecoder_rejectsTokenWithoutRole() {
+        String token = signed(JwtClaimsSet.builder().subject("42").claim("typ", "access"));
+
+        assertThatThrownBy(() -> provider.accessDecoder().decode(token)).isInstanceOf(JwtException.class);
+    }
+
+    @Test
+    void accessDecoder_rejectsTokenWithoutSub() {
+        String token = signed(JwtClaimsSet.builder().claim("role", "USER").claim("typ", "access"));
+
+        assertThatThrownBy(() -> provider.accessDecoder().decode(token)).isInstanceOf(JwtException.class);
+    }
+
+    @Test
+    void parseRefresh_missingRoleClaimThrowsInvalidToken() {
+        String token = signed(JwtClaimsSet.builder().subject("42").claim("typ", "refresh"));
+
+        assertThatThrownBy(() -> provider.parseRefresh(token)).isInstanceOf(InvalidTokenException.class);
+    }
+
+    private String signed(JwtClaimsSet.Builder claims) {
+        Instant now = clock.instant();
+        JwtClaimsSet set = claims.issuedAt(now).expiresAt(now.plusSeconds(600)).build();
+        return JwtConfig.hs256Encoder(properties)
+                .encode(JwtEncoderParameters.from(JwsHeader.with(MacAlgorithm.HS256).build(), set))
+                .getTokenValue();
     }
 
     private static String unsignedToken(String header, String payload) {

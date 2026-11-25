@@ -1,6 +1,5 @@
 package com.benggri.example.core.security;
 
-import com.benggri.example.core.member.entity.Role;
 import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -19,8 +18,7 @@ public final class CurrentUser {
             throw new AuthenticationCredentialsNotFoundException("No authenticated JWT principal");
         }
         try {
-            return new AuthUser(Long.valueOf(jwt.getSubject()),
-                    Role.valueOf(jwt.getClaimAsString(JwtProvider.CLAIM_ROLE)));
+            return JwtProvider.toAuthUser(jwt);
         } catch (IllegalArgumentException e) {
             throw new AuthenticationCredentialsNotFoundException("JWT lacks a valid subject or role", e);
         }
