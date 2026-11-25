@@ -4,8 +4,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import ch.qos.logback.classic.Level;
 import com.benggri.example.core.sample.service.SampleService;
+import io.micrometer.core.instrument.Timer;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.concurrent.TimeUnit;
 import java.util.function.LongSupplier;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 import org.springframework.aop.aspectj.annotation.AspectJProxyFactory;
 
@@ -99,6 +102,61 @@ class ServiceLoggingAspectTest {
             }
             assertThat(logs.messages()).containsExactly("SampleService.fail took 2ms");
         }
+    }
+
+    private static final String TIMER = "app.service.invocation";
+
+    @Test
+    void recordsTimerWithClassMethodOutcomeTags() {
+        var registry = new SimpleMeterRegistry();
+        var aspect = new ServiceLoggingAspect(new AopProperties(500), clockElapsing(5), registry);
+
+        proxy(aspect).greet("secret-arg");
+
+        Timer timer = registry.find(TIMER)
+                .tags("class", "SampleService", "method", "greet", "outcome", "success").timer();
+        assertThat(timer).isNotNull();
+        assertThat(timer.count()).isEqualTo(1);
+        assertThat(timer.totalTime(TimeUnit.MILLISECONDS)).isEqualTo(5.0);
+    }
+
+    @Test
+    void recordsFailureOutcomeForThrowingCall() {
+        var registry = new SimpleMeterRegistry();
+        var aspect = new ServiceLoggingAspect(new AopProperties(500), clockElapsing(2), registry);
+        RuntimeException boom = new IllegalStateException("boom-message");
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> proxy(aspect).fail(null, boom))
+                .isSameAs(boom);
+
+        assertThat(registry.find(TIMER).tags("method", "fail", "outcome", "failure").timer())
+                .isNotNull().satisfies(t -> assertThat(t.count()).isEqualTo(1));
+        assertThat(registry.find(TIMER).tags("outcome", "success").timer()).isNull();
+    }
+
+    @Test
+    void timerHasNoTagsOtherThanThree() {
+        var registry = new SimpleMeterRegistry();
+        var aspect = new ServiceLoggingAspect(new AopProperties(500), clockElapsing(1), registry);
+
+        proxy(aspect).register("a@b.c", "s3cretPw!", "n");
+
+        Timer timer = registry.find(TIMER).timer();
+        assertThat(timer).isNotNull();
+        assertThat(timer.getId().getTags().stream().map(t -> t.getKey()).collect(Collectors.toSet()))
+                .containsExactlyInAnyOrder("class", "method", "outcome");
+        String values = timer.getId().getTags().stream().map(t -> t.getValue())
+                .collect(Collectors.joining("|"));
+        assertThat(values).doesNotContain("a@b.c").doesNotContain("s3cretPw!");
+    }
+
+    @Test
+    void aspect_worksWithoutMeterRegistry() {
+        var aspect = new ServiceLoggingAspect(new AopProperties(500),
+                new org.springframework.beans.factory.support.StaticListableBeanFactory()
+                        .getBeanProvider(io.micrometer.core.instrument.MeterRegistry.class));
+
+        assertThat(proxy(aspect).greet("x")).isNotNull();
     }
 
     @Test
