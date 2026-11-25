@@ -53,6 +53,8 @@ subprojects {
         }
         // Image config only. No secrets/env here: pass JWT_SECRET, POSTGRES_PASSWORD, DB_URL at `docker run`.
         // Management/actuator ports (8081, 8082) are deliberately not exposed; api-grpc's 8083 is its only HTTP port.
+        // container.ports becomes EXPOSE metadata only: it does NOT publish anything on the host. Publishing
+        // happens only with `docker run -p`; never publish an actuator port (8083 for api-grpc) - it has no auth.
         def appPorts = [
                 'api-rest'   : ['8080'],
                 'api-graphql': ['8090'],

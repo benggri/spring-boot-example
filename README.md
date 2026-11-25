@@ -47,6 +47,8 @@ cp .env.example .env
 docker compose up -d          # PostgreSQL 17 (호스트 5432)
 ```
 
+PostgreSQL 포트는 호스트의 **모든 인터페이스**(`0.0.0.0`)에 게시되므로 같은 네트워크(LAN)의 다른 기기에서도 접근할 수 있습니다. `.env.example` 의 `POSTGRES_PASSWORD` 값(`changeme123`)은 로컬 샘플이므로 반드시 바꾸세요. `127.0.0.1` 로만 바인딩하면 아래 `docker run --add-host=host.docker.internal:host-gateway` 경로(컨테이너가 호스트 게이트웨이 주소로 접속)가 깨지므로, 이 예제는 의도적으로 모든 인터페이스에 게시하는 트레이드오프를 택했습니다(노트북·공용 네트워크에서는 방화벽으로 막거나 `ports` 를 직접 `127.0.0.1:` 로 바꾸세요).
+
 `docker compose` 는 저장소 루트의 `.env` 를 자동으로 읽습니다. 앱은 `.env` 를 읽지 않으므로 같은 변수를 셸 환경에 내보내야 합니다.
 
 ```bash
@@ -56,7 +58,11 @@ set -a; source .env; set +a   # .env 의 값을 현재 셸에 export
 ./gradlew :api-grpc:bootRun       # gRPC 9190 (actuator 8083)
 ```
 
-각각 별도 터미널에서 실행합니다. 환경 변수:
+`bootRun` 은 포그라운드로 계속 실행되므로 **앱마다 터미널을 하나씩** 엽니다(필요한 앱만 띄워도 됩니다). 새 터미널마다 `set -a; source .env; set +a` 를 먼저 실행해야 합니다(환경 변수는 터미널별입니다).
+
+종료: 앱은 해당 터미널에서 `Ctrl+C`, DB 는 `docker compose down` 입니다. `docker compose down -v` 는 데이터 볼륨(`postgres-data`)까지 지워 저장된 회원·게시글이 모두 사라지므로, 데이터를 초기화할 때만 쓰세요.
+
+환경 변수:
 
 | 이름 | 필수 | 설명 |
 |---|---|---|
@@ -78,6 +84,10 @@ set -a; source .env; set +a   # .env 의 값을 현재 셸에 export
 ## 호출 예제
 
 앱을 실행한 뒤(위 빠른 시작) 같은 회원/게시글을 세 프로토콜로 호출합니다. 이메일·비밀번호는 예시 값입니다(비밀번호는 8~72자).
+
+> **로그인/가입은 속도 제한이 없습니다.** 어느 어댑터(REST, GraphQL, gRPC)에도 login/register 의 rate limiting 이 없는 예제 프로젝트입니다. 운영에서는 게이트웨이나 리미터를 앞에 두세요. (GraphQL 은 한 요청의 루트 필드 수만 `app.graphql.max-root-fields` 로 제한합니다.)
+
+> **ADMIN 계정(로컬)**: 가입으로 만들어지는 회원은 항상 `USER` 입니다. 로컬에서 ADMIN 이 필요하면 개발 DB 에서 직접 올립니다: `UPDATE members SET role='ADMIN' WHERE email='a@example.com';` (예: `docker compose exec postgres psql -U example -d example -c "..."`). 운영 DB 에서는 검토 없이 실행하지 마세요. 이미 발급된 토큰에는 이전 역할이 들어 있으므로, 다시 로그인하거나 `refresh`(서버가 DB 에서 역할을 다시 읽음)로 받은 새 토큰부터 반영됩니다. (`docker compose exec` 명령 자체는 이 저장소에서 실행해 보지 않아 **미검증**입니다.)
 
 ### REST (curl)
 
@@ -107,7 +117,7 @@ gql '{"query":"{posts(page:0,size:10){items{id title author{id name}} total}}"}'
 
 ### gRPC (grpcurl)
 
-> **grpcurl 미검증**: 이 저장소 작성 환경에는 grpcurl 이 설치되어 있지 않았습니다. 아래 인자(`-plaintext`, `-import-path`, `-proto`, `-H`)와 서비스 이름은 `fullstorydev/grpcurl` Docker 이미지로 컨테이너의 gRPC 서버에 호출해 확인했지만, 로컬 grpcurl 바이너리로 그대로 실행해 본 것은 아닙니다. 서버 리플렉션은 꺼져 있고 Register/Login 외에는 토큰이 필요하므로 `-proto` 를 씁니다.
+> **grpcurl 미검증**: 이 저장소 작성 환경에는 grpcurl 이 설치되어 있지 않았습니다. 아래 인자(`-plaintext`, `-import-path`, `-proto`, `-H`)와 서비스 이름은 `fullstorydev/grpcurl` Docker 이미지로 컨테이너의 gRPC 서버에 호출해 확인했지만, 로컬 grpcurl 바이너리로 그대로 실행해 본 것은 아닙니다. 서버 리플렉션은 꺼져 있고 Register/Login/Refresh 외에는 토큰이 필요하므로 `-proto` 를 씁니다.
 
 ```bash
 H=localhost:9190
@@ -121,7 +131,7 @@ grpcurl $P -proto post.proto -H "authorization: Bearer $TOKEN" -d '{"page":0,"si
 ## Swagger / 모니터링 / 배치
 
 - **Swagger UI**: api-rest 실행 후 http://localhost:8080/swagger-ui.html (OpenAPI 문서는 `/v3/api-docs`).
-- **모니터링**: 세 앱이 `/actuator/prometheus` 를 노출합니다(api-rest 8081, api-graphql 8082, api-grpc 8083). Prometheus 는 compose 프로필 `monitoring` 으로 띄웁니다: `docker compose --profile monitoring up -d prometheus` (UI `http://127.0.0.1:9090`). 자세한 구성과 PromQL 은 [monitoring/README.md](monitoring/README.md). 서비스 호출 메트릭 `app_service_invocation_seconds_*` 는 AOP 로 기록됩니다.
+- **모니터링**: 세 앱이 `/actuator/prometheus` 를 노출합니다(api-rest 8081, api-graphql 8082, api-grpc 8083). Prometheus 는 compose 프로필 `monitoring` 으로 띄웁니다: `docker compose --profile monitoring up -d prometheus` (UI `http://127.0.0.1:9090`). 자세한 구성과 PromQL 은 [monitoring/README.md](monitoring/README.md). (프로필 구성은 `POSTGRES_PASSWORD=dummy docker compose --profile monitoring config -q` 로 compose 파일이 유효함만 확인했고, Prometheus 컨테이너를 실제로 띄워 scrape 하는 것은 **미검증**입니다.) 서비스 호출 메트릭 `app_service_invocation_seconds_*` 는 AOP 로 기록됩니다.
 - **배치**: 하루치 게시글을 회원별로 집계하는 잡 `memberPostStatsJob` 을 실행하고 종료합니다. `JWT_SECRET` 은 필요 없습니다.
 
 ```bash
@@ -156,7 +166,7 @@ docker run --rm --add-host=host.docker.internal:host-gateway \
   --spring.batch.job.name=memberPostStatsJob runDate=2026-11-25
 ```
 
-`-e NAME`(값 없이)은 셸에 export 된 값을 전달하므로 명령 기록에 값이 남지 않습니다. 관리(actuator) 포트 8081/8082/8083 은 인증이 없으므로 외부에 `-p` 로 게시하지 마세요. 컨테이너 안의 앱은 root 로 실행됩니다(Jib 기본값, `container.user` 미설정).
+`-e NAME`(값 없이)은 셸에 export 된 값을 전달하므로 명령 기록에 값이 남지 않습니다(이 `docker run -e NAME` 전달 방식은 **미검증**입니다: 이미지를 만들어 실제로 기동해 보지 않았습니다). 관리(actuator) 포트 8081/8082/8083 은 인증이 없으므로 외부에 `-p` 로 게시하지 마세요. Jib 이미지가 `EXPOSE 8083` 처럼 포트를 선언하는 것은 메타데이터일 뿐 포트를 게시(publish)하지 않습니다. 게시는 `docker run -p` 로 직접 지정한 포트만 됩니다. 컨테이너 안의 앱은 root 로 실행됩니다(Jib 기본값, `container.user` 미설정).
 
 ## 개발 흐름
 
@@ -177,7 +187,7 @@ docker run --rm --add-host=host.docker.internal:host-gateway \
 | `port is already allocated` / `5432 already in use` | 호스트 5432 를 다른 PostgreSQL 이 쓰는 경우입니다. `POSTGRES_HOST_PORT=55433` 을 `.env` 나 셸에 설정하고 앱에는 `DB_URL=jdbc:postgresql://localhost:55433/example` 을 함께 지정합니다. |
 | 8080/8081/8082/8083/8090/9190 이 이미 사용 중 | 해당 포트를 쓰는 프로세스를 종료하거나 `docker run -p <다른 호스트 포트>:<컨테이너 포트>` 로 매핑합니다. 로컬 실행은 포트가 `application.yml` 에 고정입니다. |
 | `docker compose` 가 `set POSTGRES_PASSWORD` 로 실패 | `.env` 가 없거나 `POSTGRES_PASSWORD` 가 비어 있습니다. `cp .env.example .env` 후 값을 확인합니다. |
-| 앱이 `app.jwt.secret must be at least 32 bytes` 로 시작 실패 | `JWT_SECRET` 이 비어 있거나 32바이트 미만입니다(배치는 불필요). `set -a; source .env; set +a` 를 같은 셸에서 실행했는지, `.env` 의 `JWT_SECRET` 값이 채워져 있는지 확인합니다. |
+| `JWT_SECRET` 문제로 앱이 시작 실패 | 원인별 메시지(`core` 의 `JwtProperties` 가 던지고 Spring 바인딩 예외의 가장 안쪽 원인으로 나옵니다. 배치는 `JWT_SECRET` 불필요). 변수가 **설정되지 않음**: Spring Boot 바인더는 풀 수 없는 `${JWT_SECRET}` 를 오류 없이 리터럴 13글자로 남기므로 `app.jwt.secret must be at least 32 bytes (UTF-8)` 가 나옵니다("미해결 플레이스홀더" 오류가 아닙니다). **비어 있음**(`.env.example` 그대로 `JWT_SECRET=`): `app.jwt.secret must be configured`. **32바이트 미만**: `app.jwt.secret must be at least 32 bytes (UTF-8)`. `set -a; source .env; set +a` 를 같은 셸에서 실행했는지, `.env` 의 `JWT_SECRET` 이 채워져 있는지 확인합니다. (세 메시지는 `ApplicationContextRunner` 로 `app.jwt.secret` 에 각 값을 넣어 확인했습니다.) |
 | 앱이 `password authentication failed for user "example"` 로 시작 실패 | `POSTGRES_PASSWORD` 가 셸에 export 되지 않았거나 DB 를 처음 만들 때의 값과 다릅니다(볼륨에 남은 이전 비밀번호). 값을 맞추거나 볼륨을 지우고 다시 만듭니다. |
 | 컨테이너에서 DB 연결 실패 | 컨테이너의 `localhost` 는 컨테이너 자신입니다. `--add-host=host.docker.internal:host-gateway` 와 `DB_URL` 의 호스트를 `host.docker.internal` 로 지정합니다. |
 | `./gradlew check` 의 DB 테스트가 시작 실패 | Testcontainers 가 Docker 를 필요로 합니다. Docker 데몬이 실행 중인지 확인합니다. |
