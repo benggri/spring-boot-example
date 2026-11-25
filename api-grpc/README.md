@@ -83,3 +83,19 @@ proto3 문자열은 U+0000 을 담을 수 있지만 PostgreSQL 은 저장/조회
 ## proto 재생성 / 확인
 
 proto 는 `src/main/proto/{auth,member,post}.proto` (패키지 `example.v1`)입니다. 자바 코드는 `com.google.protobuf` 플러그인이 빌드할 때 `build/generated/sources/proto` 에 생성하며 커밋하지 않습니다(`protoc`/`protoc-gen-grpc-java` 버전은 `gradle.properties`). 다시 생성: `./gradlew :api-grpc:generateProto`. 생성 소스는 Checkstyle 대상이 아닙니다.
+
+## 모니터링 (Prometheus)
+
+| 항목 | 값 |
+|---|---|
+| gRPC 포트 | 9190 |
+| HTTP(actuator) 포트 | 8083 (`server.port`, 별도 관리 포트 없음) |
+| 스크랩 경로 | `http://localhost:8083/actuator/prometheus` |
+
+- 노출 엔드포인트는 `health`, `prometheus` 뿐입니다 (`management.endpoints.web.exposure.include`). `env`, `beans`, `metrics`, `info`, `loggers`, `heapdump` 등은 노출하지 않으며 테스트로 확인합니다.
+- `management.endpoint.health.show-details: never` / `show-components: never`: 응답은 `{"status":"UP"}` 뿐입니다.
+- 보안: 관리 포트는 인증 없이 열려 있으므로 **외부에 공개하면 안 됩니다** (방화벽/내부 네트워크 전용, 컨테이너에서는 게시하지 않기). Prometheus 는 같은 호스트/내부망에서만 scrape 합니다.
+- 커스텀 메트릭 `app.service.invocation` (Prometheus: `app_service_invocation_seconds_*`): 태그는 `class`, `method`, `outcome`(`success`|`failure`) 세 개뿐이며 인자, 이메일, 사용자 ID, 예외 메시지는 절대 태그/값에 넣지 않습니다.
+- 이 앱에는 Spring Security 웹 필터 체인과 서블릿 컨테이너가 없었으므로, actuator 가 HTTP 를 서비스할 수 있게 `spring-boot-starter-webmvc` 만 추가하고 `spring.main.web-application-type: servlet`, `server.port: 8083` 으로 설정했습니다 (`spring-boot-starter-security` 는 없으므로 생성된 비밀번호/기본 로그인도 없습니다).
+- gRPC 표준 `grpc.health.v1.Health` 서비스는 계속 JWT 인터셉터로 보호됩니다 (공개하지 않음). 프로브는 `http://localhost:8083/actuator/health` 를 사용하세요.
+- 전체 구성: [`monitoring/README.md`](../monitoring/README.md)

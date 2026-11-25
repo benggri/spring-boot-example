@@ -5,6 +5,10 @@ plugins {
 
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-grpc-server'
+    // HTTP only so the actuator can serve health/prometheus (no Spring Security web chain here)
+    implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'io.micrometer:micrometer-registry-prometheus'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-grpc-server-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'

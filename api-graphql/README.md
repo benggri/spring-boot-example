@@ -71,3 +71,18 @@ gql '{"query":"{posts(page:0,size:10){items{id title author{id name}} total}}"}'
 ## 입력 정제 (NUL 문자)
 
 JSON 은 `\u0000` 을 허용하지만 PostgreSQL 은 NUL 문자를 저장/조회할 수 없어 드라이버 예외(500)가 됩니다. `core` 의 `TextGuard` 가 SQL 로 가는 모든 클라이언트 문자열(이메일, 이름, 제목, 내용, 검색 키워드)에서 NUL 과 탭/개행을 제외한 C0 제어문자를 저장소 호출 전에 거부하며 `BAD_REQUEST`(HTTP 200 + errors) 입니다. 검색 키워드는 200자로 제한되고 빈 비밀번호도 `core` 가 거부합니다.
+
+## 모니터링 (Prometheus)
+
+| 항목 | 값 |
+|---|---|
+| 앱 포트 | 8090 |
+| 관리(actuator) 포트 | 8082 (`management.server.port`) |
+| 스크랩 경로 | `http://localhost:8082/actuator/prometheus` |
+
+- 노출 엔드포인트는 `health`, `prometheus` 뿐입니다 (`management.endpoints.web.exposure.include`). `env`, `beans`, `metrics`, `info`, `loggers`, `heapdump` 등은 노출하지 않으며 테스트로 확인합니다.
+- `management.endpoint.health.show-details: never` / `show-components: never`: 응답은 `{"status":"UP"}` 뿐입니다.
+- 보안: 관리 포트는 인증 없이 열려 있으므로 **외부에 공개하면 안 됩니다** (방화벽/내부 네트워크 전용, 컨테이너에서는 게시하지 않기). Prometheus 는 같은 호스트/내부망에서만 scrape 합니다.
+- 커스텀 메트릭 `app.service.invocation` (Prometheus: `app_service_invocation_seconds_*`): 태그는 `class`, `method`, `outcome`(`success`|`failure`) 세 개뿐이며 인자, 이메일, 사용자 ID, 예외 메시지는 절대 태그/값에 넣지 않습니다.
+- api-rest 와 같은 이유로 `ManagementSecurityConfig`(`@Order(1)`)가 관리 포트의 `health`, `prometheus` 만 permitAll, 나머지 actuator 는 denyAll 합니다. 메인 체인(`/graphql` 보호)은 변하지 않으며 테스트로 확인합니다.
+- 전체 구성: [`monitoring/README.md`](../monitoring/README.md)

@@ -10,5 +10,16 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql/data
 
+  prometheus:
+    image: prom/prometheus:v3.7.3
+    profiles: ["monitoring"]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      # loopback only: Prometheus has no authentication
+      - "127.0.0.1:9090:9090"
+
 volumes:
   postgres-data:
