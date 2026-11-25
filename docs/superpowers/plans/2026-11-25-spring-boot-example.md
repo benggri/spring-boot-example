@@ -20,6 +20,7 @@
 - 인증은 자체 발급 JWT(access/refresh), 역할 `USER`/`ADMIN`. 시크릿은 환경 변수 `JWT_SECRET`, 코드·yml에 기본값 하드코딩 금지.
 - DB는 PostgreSQL. 실행은 docker-compose, 테스트는 Testcontainers.
 - 시큐어 코딩: SQL은 파라미터 바인딩(QueryDSL/JPA)만, 비밀번호는 BCrypt, 응답에 해시·시크릿 노출 금지.
+- 회원 조회·수정·삭제는 본인 또는 ADMIN만 가능하다(타인 이메일 조회 차단, 사용자 결정). 모든 어댑터(REST, GraphQL, gRPC)가 같은 서비스 규칙을 쓴다.
 - 모듈별 `README.md`에 "왜 이렇게 했는가"를 기록한다.
 - Spring AOP는 `core` 서비스 계층에만 적용한다(`ServiceLoggingAspect`, `AuditAspect`, `@Audited`). 로그에 메서드 인자 값을 남기지 않는다.
 - 모니터링: 각 api 앱은 Actuator를 별도 management 포트로 노출하고 `health`, `prometheus`만 노출한다(나머지 엔드포인트 비노출). 메트릭 태그는 저카디널리티(class, method, outcome)만 쓰고 인자·사용자 식별자는 태그로 쓰지 않는다.
@@ -114,7 +115,7 @@ README.md (루트), CLAUDE.md
 **Interfaces:**
 - `record AuthUser(Long id, Role role)`; `boolean isAdmin()`.
 - `record MemberResult(Long id, String email, String name, Role role)`, `record PostResult(Long id, Long memberId, String title, String content, Instant createdAt)`.
-- `MemberService`: `MemberResult register(String email, String rawPassword, String name)`(중복 → `DuplicateException`), `MemberResult get(Long id)`, `Page<MemberResult> list(Pageable)`, `MemberResult update(AuthUser actor, Long id, String name)`, `void delete(AuthUser actor, Long id)`(본인 또는 ADMIN, 아니면 `ForbiddenException`; 없으면 `NotFoundException`).
+- `MemberService`: `MemberResult register(String email, String rawPassword, String name)`(중복 → `DuplicateException`), `MemberResult get(AuthUser actor, Long id)`(**본인 또는 ADMIN만**, 그 외 `ForbiddenException`; 없으면 `NotFoundException`이 먼저 — 사용자 결정으로 변경됨), `Page<MemberResult> list(Pageable)`, `MemberResult update(AuthUser actor, Long id, String name)`, `void delete(AuthUser actor, Long id)`(본인 또는 ADMIN, 아니면 `ForbiddenException`; 없으면 `NotFoundException`).
 - `PostService`: `PostResult create(AuthUser actor, String title, String content)`, `PostResult get(Long id)`, `Page<PostResult> search(PostSearchCondition cond, Pageable pageable)`(size 상한 100, 초과 시 100으로 보정), `PostResult update(AuthUser actor, Long postId, String title, String content)`, `void delete(AuthUser actor, Long postId)`(작성자 또는 ADMIN만).
 - 비밀번호는 `PasswordEncoder`(BCrypt)로 해시. Result 레코드에 해시 필드 없음.
 
@@ -145,7 +146,7 @@ README.md (루트), CLAUDE.md
 **Files:** Create `api-rest/.../rest/RestApplication.java`, `config/SecurityConfig.java`, `config/OpenApiConfig.java`, `auth/AuthController.java`, `member/MemberController.java`, `post/PostController.java`, `error/RestExceptionHandler.java`, `resources/application.yml`, `README.md`. Test: `AuthControllerTest`, `PostControllerTest`, `RestSecurityIntegrationTest`.
 
 **Interfaces:**
-- `POST /auth/login`(`{email,password}`→`TokenPair`), `POST /auth/refresh`, `POST /api/members`(가입, 인증 불필요), `GET/PUT/DELETE /api/members/{id}`, `GET /api/posts?keyword&memberId&page&size`, `POST /api/posts`, `GET/PUT/DELETE /api/posts/{id}`. 목록 응답은 `PageResponse<T>(List<T> items, int page, int size, long total)`.
+- `POST /auth/login`(`{email,password}`→`TokenPair`), `POST /auth/refresh`, `POST /api/members`(가입, 인증 불필요), `GET/PUT/DELETE /api/members/{id}`(조회·수정·삭제 모두 본인 또는 ADMIN만; 다른 회원 이메일이 노출되지 않도록), `GET /api/posts?keyword&memberId&page&size`, `POST /api/posts`, `GET/PUT/DELETE /api/posts/{id}`. 목록 응답은 `PageResponse<T>(List<T> items, int page, int size, long total)`.
 - `SecurityConfig`: stateless, CSRF 비활성(토큰 기반 근거를 README에 기록), `oauth2ResourceServer(jwt)` + `role` 클레임을 `ROLE_*` 권한으로 변환, `/auth/**`·`POST /api/members`·`/v3/api-docs/**`·`/swagger-ui/**`만 permitAll.
 - `RestExceptionHandler`: `ProblemDetail`로 `NotFound`→404, `Forbidden`→403, `Duplicate`→409, 검증 실패→400, `BadCredentials`→401. 내부 예외 메시지·스택은 노출하지 않는다.
 - `OpenApiConfig`: Bearer JWT 보안 스킴 등록.
