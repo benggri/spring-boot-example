@@ -14,4 +14,9 @@ public class GraphqlConfig {
     MaxQueryDepthInstrumentation maxQueryDepthInstrumentation(GraphqlProperties properties) {
         return new MaxQueryDepthInstrumentation(properties.maxQueryDepth());
     }
+
+    @Bean
+    ClientErrorCodeInterceptor clientErrorCodeInterceptor() {
+        return new ClientErrorCodeInterceptor();
+    }
 }

@@ -13,7 +13,6 @@ spring:
   flyway:
     enabled: true
   graphql:
-    path: /graphql
     graphiql:
       enabled: false
 

@@ -21,6 +21,6 @@ public class MemberGraphqlController {
     @QueryMapping
     @PreAuthorize("isAuthenticated()")
     public MemberResult member(@Argument Long id) {
-        return memberService.get(CurrentUser.get(), id);
+        return memberService.get(CurrentUser.get(), IdArguments.requireId(id));
     }
 }

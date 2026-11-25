@@ -106,6 +106,7 @@ class PostGraphqlTest extends GraphqlTestBase {
 
         assertThat(res.status()).isEqualTo(200);
         assertThat(res.<List<?>>read("$.errors")).isNotEmpty();
+        assertThat(res.code()).isEqualTo("BAD_REQUEST");
         assertThat(res.body()).doesNotContain("\"data\":{").doesNotContain(author.getEmail());
         assertThat(exec(tokenFor(author), "query($id:ID!){ post(id:$id){ author{ role } } }",
                 Map.of("id", "1")).<List<?>>read("$.errors")).isNotEmpty();

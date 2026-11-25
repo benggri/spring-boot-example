@@ -1,6 +1,6 @@
 type Query {
     post(id: ID!): Post
-    posts(keyword: String, memberId: ID, page: Int = 0, size: Int = 20): PostPage!
+    posts(keyword: String, memberId: ID, page: Int! = 0, size: Int! = 20): PostPage!
     "Readable by the member themself or an ADMIN only."
     member(id: ID!): Member
 }

@@ -37,7 +37,7 @@ public class PostGraphqlController {
     @QueryMapping
     @PreAuthorize("isAuthenticated()")
     public PostResult post(@Argument Long id) {
-        return postService.get(id);
+        return postService.get(IdArguments.requireId(id));
     }
 
     /** {@code size} above 100 is clamped by the service; negative page or size below 1 is rejected. */
@@ -61,13 +61,13 @@ public class PostGraphqlController {
     @MutationMapping
     @PreAuthorize("isAuthenticated()")
     public PostResult updatePost(@Argument Long id, @Argument @Valid PostInput input) {
-        return postService.update(CurrentUser.get(), id, input.title(), input.content());
+        return postService.update(CurrentUser.get(), IdArguments.requireId(id), input.title(), input.content());
     }
 
     @MutationMapping
     @PreAuthorize("isAuthenticated()")
     public boolean deletePost(@Argument Long id) {
-        postService.delete(CurrentUser.get(), id);
+        postService.delete(CurrentUser.get(), IdArguments.requireId(id));
         return true;
     }
 

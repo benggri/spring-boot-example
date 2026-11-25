@@ -11,7 +11,7 @@ GraphQL + Spring Security(JWT) 어댑터 모듈입니다. 비즈니스 규칙(�
 - **오류 코드 / 일반 메시지**: `DataFetcherExceptionResolver`(`GraphqlExceptionResolver`)가 코드별 고정 메시지만 응답합니다. 예외 메시지(이메일·비밀번호 포함 가능)·거부된 입력값·스택 트레이스는 응답에 절대 담지 않고, 예기치 못한 예외는 서버 로그에만 ERROR 로 남깁니다(요청 변수는 기록하지 않음).
 - **질의 깊이 제한**: `MaxQueryDepthInstrumentation`, 기본 10 (`app.graphql.max-query-depth`, 1 이상 검증). 도메인 스키마는 순환이 없어 얕지만, 인트로스펙션의 재귀 타입(`__Type.ofType`)으로 깊은 질의를 만들 수 있어 필요합니다. 인트로스펙션은 켜 둔 상태이며, 운영에서는 `spring.graphql.schema.introspection.enabled=false` 로 끌 수 있습니다. GraphiQL 은 꺼져 있습니다.
 - **N+1 방지**: `Post.author` 를 `@BatchMapping` 으로 해소해, 게시글 N 개 목록도 회원 조회는 `MemberService.findAuthors`(`findAllById`) 한 번입니다. 목록 조회 전체가 SQL 3개(게시글 페이지 + count + 작성자 일괄)이며 테스트(`posts_loadsAuthorsWithoutNPlusOne`, Hibernate 통계)는 작성자 5명·게시글 10개에서 4개 이하를 단언합니다.
-- **입력 검증**: REST 와 같은 한도(이메일 254, 비밀번호 8..72, 이름 50, 제목 200, 내용 10000)를 Bean Validation 으로 검사하고 위반은 `BAD_REQUEST` 입니다. 72바이트를 넘는 다국어 비밀번호도 `BAD_REQUEST` 입니다. `posts` 의 음수 `page`, 1 미만 `size` 는 `BAD_REQUEST`, 100 초과 `size` 는 서비스가 100 으로 제한합니다.
+- **입력 검증**: REST 와 같은 한도(이메일 254, 비밀번호 8..72, 이름 50, 제목 200, 내용 10000)를 Bean Validation 으로 검사하고 위반은 `BAD_REQUEST` 입니다. 72바이트를 넘는 다국어 비밀번호도 `BAD_REQUEST` 입니다. 잘못된 인자도 모두 `BAD_REQUEST`(HTTP 200)이며 INTERNAL_ERROR 나 ERROR 로그가 되지 않습니다: 숫자가 아닌 ID, 빈 문자열 ID(`IdArguments.requireId`), 범위를 넘는 숫자 ID, 음수 `page`, 1 미만 `size`, 그리고 `page`/`size` 에 명시적 `null`(스키마가 `Int!` 이므로 graphql-java 검증 오류이고 `ClientErrorCodeInterceptor` 가 `extensions.code` 를 붙입니다. 익명 호출도 같음). 문법/스키마 검증 오류도 같은 코드를 받습니다. 100 초과 `size` 는 서비스가 100 으로 제한하며, 빈 문자열 `memberId` 는 "필터 없음" 입니다.
 - **보안 핸들러 중복**: `error/` 의 401/403 JSON 핸들러와 `SecurityConfig` 는 `api-rest` 의 것을 복사했습니다. 공유 모듈로 빼는 것은 이번 범위 밖입니다. `Clock`/`PasswordEncoder`/`JwtDecoder` 는 `core` 의 빈을 그대로 씁니다.
 
 ## 오류 코드
@@ -22,10 +22,10 @@ GraphQL + Spring Security(JWT) 어댑터 모듈입니다. 비즈니스 규칙(�
 | `FORBIDDEN` | 타인의 게시글/회원 접근 등 권한 없음 | `Forbidden` |
 | `NOT_FOUND` | 없는 게시글/회원 | `Not found` |
 | `CONFLICT` | 이미 가입된 이메일 | `Conflict` |
-| `BAD_REQUEST` | 검증 실패, 잘못된 ID/페이지 인자 | `Invalid request` |
+| `BAD_REQUEST` | 검증 실패, 잘못된/빈 ID, 잘못된 페이지 인자, 문법·스키마 검증 오류 | graphql-java 오류는 자체 메시지, 그 외 `Invalid request` |
 | `INTERNAL_ERROR` | 그 외 모든 예외 | `Internal error` |
 
-잘못된 Bearer 토큰은 GraphQL 오류가 아니라 HTTP 401 입니다. 문법·스키마 오류는 graphql-java 의 표준 검증 오류입니다.
+잘못된 Bearer 토큰은 GraphQL 오류가 아니라 HTTP 401 입니다. 문법·스키마 오류의 메시지는 graphql-java 표준이며 값은 담지 않습니다.
 
 ## 스키마 요약
 
