@@ -13,6 +13,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 @SpringBootTest
 class MemberServiceIntegrationTest extends PostgresTestBase {
@@ -26,9 +27,13 @@ class MemberServiceIntegrationTest extends PostgresTestBase {
     @Autowired
     private PostRepository postRepository;
 
+    @Autowired
+    private JdbcTemplate jdbc;
+
     @AfterEach
     void cleanUp() {
         // committed rows would leak into other tests sharing the singleton container
+        jdbc.update("DELETE FROM member_post_stats");
         postRepository.deleteAll();
         memberRepository.deleteAll();
     }
@@ -47,5 +52,29 @@ class MemberServiceIntegrationTest extends PostgresTestBase {
         assertThat(postRepository.existsById(p1.getId())).isFalse();
         assertThat(postRepository.existsById(p2.getId())).isFalse();
         assertThat(postRepository.existsById(kept.getId())).isTrue();
+    }
+
+    @Test
+    void delete_memberWithStats_succeeds() {
+        Member owner = memberRepository.save(Member.create("del-stats@x.com", "h", "S", Role.USER));
+        Member other = memberRepository.save(Member.create("del-stats-o@x.com", "h", "S", Role.USER));
+        insertStat(owner.getId());
+        insertStat(other.getId());
+
+        memberService.delete(new AuthUser(owner.getId(), Role.USER), owner.getId());
+
+        assertThat(memberRepository.existsById(owner.getId())).isFalse();
+        assertThat(statCount(owner.getId())).isZero();
+        assertThat(statCount(other.getId())).isEqualTo(1);
+    }
+
+    private void insertStat(Long memberId) {
+        jdbc.update("INSERT INTO member_post_stats (member_id, stat_date, post_count, created_at)"
+                + " VALUES (?, DATE '2026-11-24', 3, now())", memberId);
+    }
+
+    private int statCount(Long memberId) {
+        return jdbc.queryForObject("SELECT count(*) FROM member_post_stats WHERE member_id = ?",
+                Integer.class, memberId);
     }
 }
