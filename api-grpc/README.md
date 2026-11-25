@@ -53,22 +53,32 @@ gRPC 포트는 9190(`spring.grpc.server.port`)입니다.
 
 ## grpcurl 예시
 
-리플렉션을 켜지 않았다면 `-proto` 를 씁니다(`-import-path api-grpc/src/main/proto -proto auth.proto`). 편의상 아래는 `SPRING_GRPC_SERVER_REFLECTION_ENABLED=true` 로 실행했다고 가정합니다.
+리플렉션 서비스도 전역 인터셉터 대상이라 토큰이 필요합니다(기본은 꺼짐). 그래서 토큰이 필요 없는 Register/Login 은 `-proto`/`-import-path` 로 호출합니다.
 
 ```bash
 H=localhost:9190
+P="-plaintext -import-path api-grpc/src/main/proto"
 
 # 가입 (토큰 불필요)
-grpcurl -plaintext -d '{"email":"a@example.com","password":"change-me-please","name":"Alice"}' $H example.v1.MemberService/Register
+grpcurl $P -proto member.proto -d '{"email":"a@example.com","password":"change-me-please","name":"Alice"}' $H example.v1.MemberService/Register
 
 # 로그인 (토큰 불필요) -> accessToken
-TOKEN=$(grpcurl -plaintext -d '{"email":"a@example.com","password":"change-me-please"}' $H example.v1.AuthService/Login | jq -r .accessToken)
+TOKEN=$(grpcurl $P -proto auth.proto -d '{"email":"a@example.com","password":"change-me-please"}' $H example.v1.AuthService/Login | jq -r .accessToken)
 
 # 이후 호출은 authorization 메타데이터 필요
-grpcurl -plaintext -H "authorization: Bearer $TOKEN" -d '{"title":"hi","content":"hello"}' $H example.v1.PostService/Create
-grpcurl -plaintext -H "authorization: Bearer $TOKEN" -d '{"page":0,"size":10}' $H example.v1.PostService/Search
-grpcurl -plaintext -H "authorization: Bearer $TOKEN" -d '{"id":1}' $H example.v1.PostService/Get
+grpcurl $P -proto post.proto -H "authorization: Bearer $TOKEN" -d '{"title":"hi","content":"hello"}' $H example.v1.PostService/Create
+grpcurl $P -proto post.proto -H "authorization: Bearer $TOKEN" -d '{"page":0,"size":10}' $H example.v1.PostService/Search
 ```
+
+리플렉션을 켠 경우(`SPRING_GRPC_SERVER_REFLECTION_ENABLED=true`)에는 `-proto` 대신 `-reflect-header "authorization: Bearer $TOKEN"` 을 함께 주면 `list`/`describe` 가 동작합니다.
+
+## 입력 정제 (NUL 문자)
+
+proto3 문자열은 U+0000 을 담을 수 있지만 PostgreSQL 은 저장/조회할 수 없어 드라이버 예외(서버 오류)가 됩니다. `core` 의 `TextGuard` 가 SQL 로 가는 모든 클라이언트 문자열(이메일, 이름, 제목, 내용, 검색 키워드)에서 NUL 과 탭/개행을 제외한 C0 제어문자를 저장소 호출 전에 거부하고(`InvalidRequestException`, `INVALID_ARGUMENT`), 검색 키워드는 200자로 제한합니다. 빈 비밀번호도 `core` 가 거부합니다.
+
+## 운영 하드닝 메모
+
+예제는 keepalive, 동시 호출 수(`max-concurrent-calls`), 호출 데드라인 제한을 설정하지 않았습니다. 운영에서는 TLS 와 함께 이 제한들을 추가하세요.
 
 ## proto 재생성 / 확인
 

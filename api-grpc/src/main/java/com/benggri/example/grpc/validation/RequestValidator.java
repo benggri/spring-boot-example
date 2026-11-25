@@ -86,7 +86,7 @@ public final class RequestValidator {
     /** Characters, not bytes; core additionally rejects more than 72 UTF-8 bytes (BCrypt's limit). */
     private static void passwordLength(String field, String value) {
         int length = value.codePointCount(0, value.length());
-        if (length < MIN_PASSWORD || length > MAX_PASSWORD) {
+        if (value.isBlank() || length < MIN_PASSWORD || length > MAX_PASSWORD) {
             throw new InvalidFieldException(field);
         }
     }

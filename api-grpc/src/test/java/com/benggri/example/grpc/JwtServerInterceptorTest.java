@@ -33,6 +33,8 @@ class JwtServerInterceptorTest extends GrpcTestBase {
     private static final Set<String> PUBLIC = Set.of("example.v1.AuthService/Login",
             "example.v1.AuthService/Refresh", "example.v1.MemberService/Register");
 
+    private static final String HEALTH_CHECK = "grpc.health.v1.Health/Check";
+
     @Autowired
     private List<io.grpc.BindableService> services;
 
@@ -119,18 +121,27 @@ class JwtServerInterceptorTest extends GrpcTestBase {
     @Test
     void onlyThreePublicMethodsAreAccessibleWithoutToken() {
         Set<String> accessible = new TreeSet<>();
+        Set<String> all = new TreeSet<>();
         int methods = 0;
         for (io.grpc.BindableService service : services) {
             for (ServerMethodDefinition<?, ?> def : service.bindService().getMethods()) {
                 methods++;
                 String name = def.getMethodDescriptor().getFullMethodName();
+                all.add(name);
                 if (!callWithoutToken(name).getCode().equals(Status.Code.UNAUTHENTICATED)) {
                     accessible.add(name);
                 }
             }
         }
         assertThat(methods).isGreaterThanOrEqualTo(11);
+        // Boot's health service is registered too, so the enumeration cannot pass vacuously
+        assertThat(all).contains(HEALTH_CHECK);
         assertThat(accessible).containsExactlyInAnyOrderElementsOf(PUBLIC);
+    }
+
+    @Test
+    void healthCheck_withoutTokenIsUnauthenticated() {
+        assertThat(callWithoutToken(HEALTH_CHECK).getCode()).isEqualTo(Status.Code.UNAUTHENTICATED);
     }
 
     /** Sends an empty request without any credentials and returns the resulting status. */

@@ -28,7 +28,7 @@ class ProtoPrivacyTest {
         assertThat(reachable).extracting(Descriptor::getName).contains("PostResponse", "Author");
         for (Descriptor message : reachable) {
             for (FieldDescriptor field : message.getFields()) {
-                assertThat(field.getName()).isNotIn("email", "password", "password_hash");
+                assertThat(field.getName()).isNotIn("email", "role", "password", "password_hash");
             }
         }
     }

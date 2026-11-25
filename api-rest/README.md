@@ -44,3 +44,7 @@ export $(grep -v '^#' .env | xargs)
 ```
 
 그 다음 http://localhost:8080/swagger-ui.html 에 접속합니다.
+
+## 입력 정제 (NUL 문자)
+
+JSON 은 `\u0000` 을 허용하지만 PostgreSQL 은 NUL 문자를 저장/조회할 수 없어 드라이버 예외(500)가 됩니다. `core` 의 `TextGuard` 가 SQL 로 가는 모든 클라이언트 문자열(이메일, 이름, 제목, 내용, 검색 키워드)에서 NUL 과 탭/개행을 제외한 C0 제어문자를 저장소 호출 전에 거부하며 HTTP 400 `application/problem+json` 입니다. 검색 키워드는 200자로 제한되고 빈 비밀번호도 `core` 가 거부합니다.
