@@ -1,5 +1,6 @@
 package com.benggri.example.core.member.service;
 
+import com.benggri.example.core.aop.Audited;
 import com.benggri.example.core.common.DuplicateException;
 import com.benggri.example.core.common.ForbiddenException;
 import com.benggri.example.core.common.NotFoundException;
@@ -31,6 +32,7 @@ public class MemberService {
         this.passwordEncoder = passwordEncoder;
     }
 
+    @Audited("member.register")
     public MemberResult register(String email, String rawPassword, String name) {
         if (memberRepository.existsByEmail(email)) {
             throw new DuplicateException("Email already registered: " + email);
@@ -54,6 +56,7 @@ public class MemberService {
         return memberRepository.findAll(pageable).map(MemberResult::from);
     }
 
+    @Audited("member.update")
     public MemberResult update(AuthUser actor, Long id, String name) {
         Member member = find(id);
         requireSelfOrAdmin(actor, id);
@@ -61,6 +64,7 @@ public class MemberService {
         return MemberResult.from(member);
     }
 
+    @Audited("member.delete")
     public void delete(AuthUser actor, Long id) {
         Member member = find(id);
         requireSelfOrAdmin(actor, id);

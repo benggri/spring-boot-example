@@ -1,5 +1,6 @@
 package com.benggri.example.core.post.service;
 
+import com.benggri.example.core.aop.Audited;
 import com.benggri.example.core.common.ForbiddenException;
 import com.benggri.example.core.common.NotFoundException;
 import com.benggri.example.core.member.entity.Member;
@@ -30,6 +31,7 @@ public class PostService {
         this.memberRepository = memberRepository;
     }
 
+    @Audited("post.create")
     public PostResult create(AuthUser actor, String title, String content) {
         Member author = memberRepository.findById(actor.id())
                 .orElseThrow(() -> new NotFoundException("Member not found: " + actor.id()));
@@ -46,6 +48,7 @@ public class PostService {
         return postRepository.search(cond, normalize(pageable)).map(PostResult::from);
     }
 
+    @Audited("post.update")
     public PostResult update(AuthUser actor, Long postId, String title, String content) {
         Post post = find(postId);
         requireOwnerOrAdmin(actor, post.getMember().getId());
@@ -53,6 +56,7 @@ public class PostService {
         return PostResult.from(post);
     }
 
+    @Audited("post.delete")
     public void delete(AuthUser actor, Long postId) {
         Post post = find(postId);
         requireOwnerOrAdmin(actor, post.getMember().getId());
