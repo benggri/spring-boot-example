@@ -9,8 +9,10 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import lombok.Getter;
 import org.hibernate.annotations.CreationTimestamp;
 
+@Getter
 @Entity
 @Table(name = "members")
 public class Member {
@@ -52,29 +54,5 @@ public class Member {
 
     public void rename(String name) {
         this.name = name;
-    }
-
-    public Long getId() {
-        return id;
-    }
-
-    public String getEmail() {
-        return email;
-    }
-
-    public String getPasswordHash() {
-        return passwordHash;
-    }
-
-    public String getName() {
-        return name;
-    }
-
-    public Role getRole() {
-        return role;
-    }
-
-    public Instant getCreatedAt() {
-        return createdAt;
     }
 }
