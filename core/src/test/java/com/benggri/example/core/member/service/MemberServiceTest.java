@@ -7,6 +7,7 @@ import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.benggri.example.core.common.DuplicateException;
@@ -21,6 +22,7 @@ import com.benggri.example.core.post.repository.PostRepository;
 import com.benggri.example.core.security.AuthUser;
 import java.lang.reflect.RecordComponent;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -29,6 +31,8 @@ import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -168,9 +172,47 @@ class MemberServiceTest {
     }
 
     @Test
-    void get_missingThrowsNotFound() {
+    void get_bySelfSucceeds() {
+        when(memberRepository.findById(1L)).thenReturn(Optional.of(member(1L, Role.USER)));
+
+        assertThat(service().get(new AuthUser(1L, Role.USER), 1L).email()).isEqualTo("a@x.com");
+    }
+
+    @Test
+    void get_byAdminSucceeds() {
+        when(memberRepository.findById(1L)).thenReturn(Optional.of(member(1L, Role.USER)));
+
+        assertThat(service().get(new AuthUser(9L, Role.ADMIN), 1L).id()).isEqualTo(1L);
+    }
+
+    @Test
+    void get_byOtherUserThrowsForbidden() {
+        when(memberRepository.findById(1L)).thenReturn(Optional.of(member(1L, Role.USER)));
+
+        assertThatThrownBy(() -> service().get(new AuthUser(2L, Role.USER), 1L))
+                .isInstanceOf(ForbiddenException.class);
+    }
+
+    @Test
+    void get_missingThrowsNotFoundEvenForOthers() {
         when(memberRepository.findById(1L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service().get(1L)).isInstanceOf(NotFoundException.class);
+        assertThatThrownBy(() -> service().get(new AuthUser(2L, Role.USER), 1L))
+                .isInstanceOf(NotFoundException.class);
+    }
+
+    @Test
+    void list_byAdminSucceeds() {
+        PageRequest pageable = PageRequest.of(0, 10);
+        when(memberRepository.findAll(pageable)).thenReturn(new PageImpl<>(List.of(member(1L, Role.USER))));
+
+        assertThat(service().list(new AuthUser(9L, Role.ADMIN), pageable).getContent()).hasSize(1);
+    }
+
+    @Test
+    void list_byUserThrowsForbidden() {
+        assertThatThrownBy(() -> service().list(new AuthUser(1L, Role.USER), PageRequest.of(0, 10)))
+                .isInstanceOf(ForbiddenException.class);
+        verifyNoInteractions(memberRepository);
     }
 }

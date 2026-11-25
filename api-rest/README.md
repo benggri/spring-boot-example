@@ -18,7 +18,7 @@ REST + Spring Security(JWT) + Swagger 어댑터 모듈입니다. 비즈니스 �
 | POST | `/auth/login` | 로그인, 토큰 쌍 발급 |
 | POST | `/auth/refresh` | 토큰 쌍 재발급 |
 | POST | `/api/members` | 회원 가입 (201 + Location) |
-| GET / PUT / DELETE | `/api/members/{id}` | 조회 / 이름 변경 / 삭제 (204) |
+| GET / PUT / DELETE | `/api/members/{id}` | 조회 / 이름 변경 / 삭제 (204). 모두 본인 또는 ADMIN 만 가능 |
 | GET | `/api/posts?keyword&memberId&page&size` | 검색 (size 100 초과는 100 으로 제한) |
 | POST | `/api/posts` | 게시글 작성 (201 + Location) |
 | GET / PUT / DELETE | `/api/posts/{id}` | 조회 / 수정 / 삭제 (204) |

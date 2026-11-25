@@ -60,12 +60,17 @@ public class MemberService {
     }
 
     @Transactional(readOnly = true)
-    public MemberResult get(Long id) {
-        return MemberResult.from(find(id));
+    public MemberResult get(AuthUser actor, Long id) {
+        Member member = find(id);
+        requireSelfOrAdmin(actor, id);
+        return MemberResult.from(member);
     }
 
     @Transactional(readOnly = true)
-    public Page<MemberResult> list(Pageable pageable) {
+    public Page<MemberResult> list(AuthUser actor, Pageable pageable) {
+        if (!actor.isAdmin()) {
+            throw new ForbiddenException("Only an admin may list members");
+        }
         return memberRepository.findAll(pageable).map(MemberResult::from);
     }
 
@@ -92,7 +97,7 @@ public class MemberService {
 
     private void requireSelfOrAdmin(AuthUser actor, Long targetId) {
         if (!actor.isAdmin() && !targetId.equals(actor.id())) {
-            throw new ForbiddenException("Not allowed to modify member " + targetId);
+            throw new ForbiddenException("Not allowed to access member " + targetId);
         }
     }
 }

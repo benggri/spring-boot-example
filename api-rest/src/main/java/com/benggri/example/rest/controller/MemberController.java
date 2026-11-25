@@ -43,9 +43,9 @@ public class MemberController {
     }
 
     @GetMapping("/{id}")
-    @Operation(summary = "Get a member")
+    @Operation(summary = "Get a member (owner or admin)")
     public MemberResult get(@PathVariable Long id) {
-        return memberService.get(id);
+        return memberService.get(CurrentUser.get(), id);
     }
 
     @PutMapping("/{id}")

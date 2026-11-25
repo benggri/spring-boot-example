@@ -3,6 +3,8 @@ package com.benggri.example.rest;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.benggri.example.core.member.entity.Member;
+import com.benggri.example.core.member.entity.Role;
 import com.benggri.example.core.member.repository.MemberRepository;
 import com.benggri.example.core.post.repository.PostRepository;
 import com.benggri.example.core.support.PostgresTestBase;
@@ -13,6 +15,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
@@ -32,6 +35,9 @@ abstract class IntegrationTestBase extends PostgresTestBase {
 
     @Autowired
     protected MemberRepository memberRepository;
+
+    @Autowired
+    private PasswordEncoder passwordEncoder;
 
     @DynamicPropertySource
     static void jwtProperties(DynamicPropertyRegistry registry) {
@@ -55,6 +61,11 @@ abstract class IntegrationTestBase extends PostgresTestBase {
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         return ((Number) JsonPath.read(body, "$.id")).longValue();
+    }
+
+    /** Inserts an ADMIN directly (registration only creates USERs); logs in with {@link #PASSWORD}. */
+    protected void createAdmin(String email) {
+        memberRepository.save(Member.create(email, passwordEncoder.encode(PASSWORD), "Admin", Role.ADMIN));
     }
 
     /** Returns {accessToken, refreshToken}. */
