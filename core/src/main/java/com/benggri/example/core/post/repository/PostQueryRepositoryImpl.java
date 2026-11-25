@@ -1,7 +1,9 @@
-package com.benggri.example.core.post;
+package com.benggri.example.core.post.repository;
 
-import static com.benggri.example.core.post.QPost.post;
+import static com.benggri.example.core.post.entity.QPost.post;
 
+import com.benggri.example.core.post.dto.PostSearchCondition;
+import com.benggri.example.core.post.entity.Post;
 import com.querydsl.core.types.dsl.BooleanExpression;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import jakarta.persistence.EntityManager;

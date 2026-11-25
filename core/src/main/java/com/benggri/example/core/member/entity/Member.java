@@ -1,4 +1,4 @@
-package com.benggri.example.core.member;
+package com.benggri.example.core.member.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;

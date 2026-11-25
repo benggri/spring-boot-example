@@ -1,8 +1,10 @@
-package com.benggri.example.core.post;
+package com.benggri.example.core.post.repository;
 
-import com.benggri.example.core.member.Member;
-import com.benggri.example.core.member.MemberRepository;
-import com.benggri.example.core.member.Role;
+import com.benggri.example.core.member.entity.Member;
+import com.benggri.example.core.member.entity.Role;
+import com.benggri.example.core.member.repository.MemberRepository;
+import com.benggri.example.core.post.dto.PostSearchCondition;
+import com.benggri.example.core.post.entity.Post;
 import com.benggri.example.core.support.PostgresTestBase;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;

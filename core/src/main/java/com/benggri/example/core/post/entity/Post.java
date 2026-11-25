@@ -1,6 +1,6 @@
-package com.benggri.example.core.post;
+package com.benggri.example.core.post.entity;
 
-import com.benggri.example.core.member.Member;
+import com.benggri.example.core.member.entity.Member;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;

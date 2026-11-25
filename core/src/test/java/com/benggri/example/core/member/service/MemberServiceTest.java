@@ -1,4 +1,4 @@
-package com.benggri.example.core.member;
+package com.benggri.example.core.member.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -11,7 +11,11 @@ import static org.mockito.Mockito.when;
 import com.benggri.example.core.common.DuplicateException;
 import com.benggri.example.core.common.ForbiddenException;
 import com.benggri.example.core.common.NotFoundException;
-import com.benggri.example.core.post.PostRepository;
+import com.benggri.example.core.member.dto.MemberResult;
+import com.benggri.example.core.member.entity.Member;
+import com.benggri.example.core.member.entity.Role;
+import com.benggri.example.core.member.repository.MemberRepository;
+import com.benggri.example.core.post.repository.PostRepository;
 import com.benggri.example.core.security.AuthUser;
 import java.lang.reflect.RecordComponent;
 import java.util.Arrays;

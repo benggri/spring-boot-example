@@ -1,9 +1,13 @@
-package com.benggri.example.core.post;
+package com.benggri.example.core.post.service;
 
 import com.benggri.example.core.common.ForbiddenException;
 import com.benggri.example.core.common.NotFoundException;
-import com.benggri.example.core.member.Member;
-import com.benggri.example.core.member.MemberRepository;
+import com.benggri.example.core.member.entity.Member;
+import com.benggri.example.core.member.repository.MemberRepository;
+import com.benggri.example.core.post.dto.PostResult;
+import com.benggri.example.core.post.dto.PostSearchCondition;
+import com.benggri.example.core.post.entity.Post;
+import com.benggri.example.core.post.repository.PostRepository;
 import com.benggri.example.core.security.AuthUser;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;

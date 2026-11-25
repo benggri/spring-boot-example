@@ -1,9 +1,12 @@
-package com.benggri.example.core.member;
+package com.benggri.example.core.member.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.benggri.example.core.post.Post;
-import com.benggri.example.core.post.PostRepository;
+import com.benggri.example.core.member.entity.Member;
+import com.benggri.example.core.member.entity.Role;
+import com.benggri.example.core.member.repository.MemberRepository;
+import com.benggri.example.core.post.entity.Post;
+import com.benggri.example.core.post.repository.PostRepository;
 import com.benggri.example.core.security.AuthUser;
 import com.benggri.example.core.support.PostgresTestBase;
 import org.junit.jupiter.api.AfterEach;

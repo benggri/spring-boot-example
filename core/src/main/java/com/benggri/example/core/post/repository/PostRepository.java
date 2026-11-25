@@ -1,5 +1,6 @@
-package com.benggri.example.core.post;
+package com.benggri.example.core.post.repository;
 
+import com.benggri.example.core.post.entity.Post;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;

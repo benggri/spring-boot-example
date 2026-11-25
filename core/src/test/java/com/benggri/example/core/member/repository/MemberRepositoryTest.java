@@ -1,5 +1,7 @@
-package com.benggri.example.core.member;
+package com.benggri.example.core.member.repository;
 
+import com.benggri.example.core.member.entity.Member;
+import com.benggri.example.core.member.entity.Role;
 import com.benggri.example.core.support.PostgresTestBase;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
