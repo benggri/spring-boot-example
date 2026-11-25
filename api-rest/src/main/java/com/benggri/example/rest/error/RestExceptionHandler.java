@@ -30,7 +30,9 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExcep
 /**
  * Maps every failure to an {@code application/problem+json} body with a fixed, generic detail.
  * Exception messages and rejected values are never echoed: they can carry emails, passwords or
- * internals. Standard MVC errors (404, 405, 415, malformed JSON) come from the parent class.
+ * internals. Standard MVC errors (404, 405, 415, malformed JSON) come from the parent class, whose
+ * default details quote client input (Content-Type, path, method, parameter names); they are
+ * replaced in {@link #handleExceptionInternal} by one fixed phrase per status.
  */
 @Slf4j
 @RestControllerAdvice
@@ -110,6 +112,32 @@ public class RestExceptionHandler extends ResponseEntityExceptionHandler {
     protected ResponseEntity<Object> handleTypeMismatch(TypeMismatchException ex, HttpHeaders headers,
             HttpStatusCode status, WebRequest request) {
         return respond(problem(HttpStatus.BAD_REQUEST, "Invalid request parameter"));
+    }
+
+    @Override
+    protected ResponseEntity<Object> handleExceptionInternal(Exception ex, Object body, HttpHeaders headers,
+            HttpStatusCode statusCode, WebRequest request) {
+        // the parent's body (ErrorResponse detail) can quote client input: discard it
+        HttpStatus status = HttpStatus.resolve(statusCode.value());
+        ProblemDetail fixed = ProblemDetail.forStatusAndDetail(statusCode, fixedDetail(statusCode));
+        fixed.setTitle(status != null ? status.getReasonPhrase() : "Error");
+        HttpHeaders out = new HttpHeaders();
+        if (headers != null) {
+            out.putAll(headers); // keeps Allow / Accept hints, which hold no request data
+        }
+        out.setContentType(MediaType.APPLICATION_PROBLEM_JSON);
+        return new ResponseEntity<>(fixed, out, statusCode);
+    }
+
+    private static String fixedDetail(HttpStatusCode status) {
+        return switch (status.value()) {
+            case 400 -> "Invalid request";
+            case 404 -> "Not found";
+            case 405 -> "Method not allowed";
+            case 406 -> "Not acceptable";
+            case 415 -> "Unsupported media type";
+            default -> status.is5xxServerError() ? "An unexpected error occurred" : "Request failed";
+        };
     }
 
     private static ResponseEntity<Object> respond(ProblemDetail body) {

@@ -27,6 +27,9 @@ management:
     port: 8081
   endpoints:
     web:
+      discovery:
+        # no /actuator links page: it would list the exposed endpoints to anyone who can reach the port
+        enabled: false
       exposure:
         include: health,prometheus
   endpoint:

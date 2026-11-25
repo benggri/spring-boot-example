@@ -3,6 +3,7 @@ package com.benggri.example.rest;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Map;
 import javax.crypto.spec.SecretKeySpec;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.JwsHeader;
@@ -34,5 +35,14 @@ public final class TokenFactory {
         }
         JwsHeader header = JwsHeader.with(MacAlgorithm.HS256).build();
         return ENCODER.encode(JwtEncoderParameters.from(header, claims.build())).getTokenValue();
+    }
+
+    /** A signed token whose claims are exactly {@code claims} (plus iat/exp): for wrong-typed or odd values. */
+    public static String withClaims(Map<String, Object> claims) {
+        Instant now = Instant.now();
+        JwtClaimsSet.Builder builder = JwtClaimsSet.builder().issuedAt(now).expiresAt(now.plusSeconds(900));
+        claims.forEach(builder::claim);
+        JwsHeader header = JwsHeader.with(MacAlgorithm.HS256).build();
+        return ENCODER.encode(JwtEncoderParameters.from(header, builder.build())).getTokenValue();
     }
 }
