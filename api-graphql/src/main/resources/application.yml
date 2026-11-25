@@ -1,0 +1,28 @@
+server:
+  port: 8090
+
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/example}
+    username: ${DB_USERNAME:example}
+    password: ${POSTGRES_PASSWORD}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+  graphql:
+    path: /graphql
+    graphiql:
+      enabled: false
+
+app:
+  jwt:
+    secret: ${JWT_SECRET}
+    access-ttl: PT15M
+    refresh-ttl: P7D
+  aop:
+    slow-threshold-ms: 500
+  graphql:
+    max-query-depth: 10
