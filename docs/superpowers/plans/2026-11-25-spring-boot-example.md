@@ -6,7 +6,7 @@
 
 **Architecture:** `core`(엔티티, JPA, QueryDSL, 서비스, JWT)에 `api-rest`, `api-graphql`, `api-grpc` 세 앱이 단방향으로 의존한다. 어댑터는 서비스만 호출하는 얇은 계층이다. JWT는 자체 발급하며 같은 토큰을 HTTP 헤더와 gRPC 메타데이터에 쓴다.
 
-**Tech Stack:** Spring Boot 4.2.0, Java 21, Gradle Groovy, Spring Security(oauth2-jose), Spring Data JPA, QueryDSL, Flyway, PostgreSQL, springdoc-openapi, spring-graphql, Spring Boot 내장 gRPC 스타터(`spring-boot-starter-grpc-server`), Testcontainers, Checkstyle, Jib, Spring AOP, Actuator + Micrometer + Prometheus.
+**Tech Stack:** Spring Boot 4.2.0, Java 21, Gradle Groovy, Spring Security(oauth2-jose), Spring Data JPA, QueryDSL, Flyway, PostgreSQL, springdoc-openapi, spring-graphql, Spring Boot 내장 gRPC 스타터(`spring-boot-starter-grpc-server`), Testcontainers, Checkstyle, Jib, Lombok, Spring AOP, Actuator + Micrometer + Prometheus.
 
 **Spec:** `docs/superpowers/specs/2026-11-25-spring-boot-example-design.md`
 **Requirements:** `docs/requirements/2026-11-25/01/INITIAL-REQUIREMENTS.md`
@@ -24,6 +24,7 @@
 - Spring AOP는 `core` 서비스 계층에만 적용한다(`ServiceLoggingAspect`, `AuditAspect`, `@Audited`). 로그에 메서드 인자 값을 남기지 않는다.
 - 모니터링: 각 api 앱은 Actuator를 별도 management 포트로 노출하고 `health`, `prometheus`만 노출한다(나머지 엔드포인트 비노출). 메트릭 태그는 저카디널리티(class, method, outcome)만 쓰고 인자·사용자 식별자는 태그로 쓰지 않는다.
 - 개발 방식은 Spec-driven + Subagent-driven. 요구사항 변경은 요구사항 → spec → 계획 순서로 문서를 먼저 갱신한다. `docs/ai-dlc/GUIDE.md`가 이를 설명한다.
+- getter/setter는 직접 작성하지 않고 Lombok(`@Getter`, 필요한 곳에만 `@Setter`)을 쓴다. 엔티티에는 `@Setter` 금지(상태 변경은 도메인 메서드). record에는 Lombok 불필요. 생성자 계열 Lombok 어노테이션은 쓰지 않는다.
 - Docker 이미지는 Jib Gradle 플러그인으로만 빌드한다(Dockerfile 금지). 대상은 `api-rest`, `api-graphql`, `api-grpc`. `JWT_SECRET`·DB 비밀번호는 이미지에 포함하지 않고 실행 시 환경 변수로 주입한다.
 
 ## TDD Workflow (모든 Task에 적용)
@@ -241,3 +242,15 @@ README.md (루트), CLAUDE.md
 - [ ] **Step 1: 작성.** 위 8개 절을 쓴다(OKF 절은 마지막)(절마다 Write/Edit로 나눠서). 사실이 아닌 내용(없는 명령·경로)을 쓰지 않는다.
 - [ ] **Step 2: Verify.** Run: `grep -o '`docs/[^`]*`' docs/ai-dlc/GUIDE.md | tr -d '`' | sort -u | xargs -I{} sh -c 'test -e "{}" || echo MISSING {}'` → Expected: 출력 없음(참조한 docs 경로가 모두 존재). 8개 절 제목이 모두 있는지 `grep -c '^## ' docs/ai-dlc/GUIDE.md` → 8 이상.
 - [ ] **Step 3: Commit** `docs: add ai-dlc guide`.
+
+### Task 13: Lombok 적용 — **Task 4 직후, Task 5 전에 실행**
+
+**Files:** Modify `build.gradle`(공통) 또는 `core/build.gradle`(Lombok `compileOnly` + `annotationProcessor`, 테스트용 `testCompileOnly`/`testAnnotationProcessor`), 필요 시 `lombok.config`, `core/.../member/Member.java`, `core/.../post/Post.java` 및 이 시점까지 수작업 getter/setter가 있는 모든 main 클래스. Test: 기존 테스트 전체(안전망) + `LombokAccessorsTest`.
+
+**Interfaces:** Produces: 이후 모든 Task가 getter/setter를 Lombok으로만 만든다. 공개 API(메서드 이름·시그니처, 예: `Member.getEmail()`, `Post.getMember()`)는 변하지 않는다.
+
+- [ ] **Step 1: Baseline.** Run: `./gradlew check` → Expected: PASS(변경 전 기준선).
+- [ ] **Step 2: Red.** `LombokAccessorsTest`(core 테스트)를 쓴다: `member_gettersAreGeneratedByLombok`(리플렉션으로 `Member.class.getDeclaredMethod("getEmail")`에 `@lombok.Generated` 부재 확인이 아니라, `lombok.config`에 `lombok.addLombokGeneratedAnnotation = true`를 두고 `getEmail`, `getRole`, `getName` 메서드가 `@Generated`(Lombok) 표시를 가짐을 단언), `post_gettersAreGeneratedByLombok`(`getTitle`, `getContent`, `getMember`), `entities_haveNoPublicSetters`(Member, Post의 public `set*` 메서드 0개). Run: `./gradlew :core:test --tests '*LombokAccessorsTest'` → Expected: FAIL(수작업 getter에 Generated 표시 없음).
+- [ ] **Step 3: Green.** Lombok 의존성을 추가한다. **QueryDSL apt와의 처리 순서를 지킨다(`annotationProcessor` 목록에서 Lombok을 querydsl-apt보다 먼저).** `Member`, `Post`의 수작업 getter를 지우고 클래스에 `@Getter`를 붙인다. `@Setter`는 붙이지 않는다. 다른 main 클래스의 수작업 getter/setter도 같은 방식으로 바꾼다(record는 건드리지 않음).
+- [ ] **Step 4: Verify.** Run: `./gradlew check` → Expected: PASS(기존 테스트 전체와 Q클래스 생성 포함, Checkstyle 위반 0). Run: `grep -rnE "public [A-Za-z<>?, \[\]]+ (get|set)[A-Z][A-Za-z]*\(" --include=*.java */src/main` → Expected: 수작업 getter/setter 없음(출력 없음; 도메인 메서드 `isAdmin()` 등은 `get`/`set` 접두사가 아니므로 해당 없음).
+- [ ] **Step 5: Commit** `refactor: replace handwritten accessors with lombok`.

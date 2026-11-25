@@ -35,6 +35,7 @@
 - AI-DLC 가이드(사용자 추가 요구): `docs/ai-dlc/GUIDE.md`. 개발 방식은 Spec-driven + Subagent-driven(사용자 선호). AWS AI-DLC의 용어(Intent, Unit, Bolt, Inception/Construction/Operations)를 이 프로젝트의 산출물에 대응시킨 해석은 제 판단이며, 가이드에 "이 저장소의 해석"임을 명시한다.
 - OKF(사용자 요청, 유용할 경우): 확인 결과 Google Cloud가 공개한 마크다운+YAML frontmatter 기반 지식 번들 형식(현재 v0.3, 1.0 이전이라 minor에서도 호환 깨짐 가능). 이 저장소에서는 **선택 사항**으로 가이드에 소개만 한다. 기존 CLAUDE.md·spec·계획을 OKF로 바꾸지 않고, 번들(`docs/knowledge/`)도 만들지 않는다(YAGNI, 제 판단).
 - graphify 비교(사용자 요청): 가이드 OKF 절에서 graphify(설치된 스킬, 코드·문서 → 지식 그래프 자동 생성·질의)와 비교한다. 보완 관계로 서술하고, 구현 후 `/graphify` 실행은 선택 안내로만 둔다(제 판단). 정확도·비용은 미검증으로 명시.
+- Lombok(사용자 추가 요구): getter/setter는 Lombok으로 생성하고 수작업 코드는 제거한다. 엔티티에는 `@Getter`만 쓰고 `@Setter`는 쓰지 않는다(불변식 보호, 제 판단 — 도메인 메서드로만 변경). 생성자 계열 어노테이션은 요청 범위 밖이라 쓰지 않는다(YAGNI). QueryDSL apt와의 annotationProcessor 순서(Lombok 먼저)는 구현 시 검증.
 - 컨테이너 이미지(사용자 요구): Jib Gradle 플러그인으로 빌드, Dockerfile 없음. 세 api 앱이 대상이며 시크릿은 이미지에 포함하지 않는다. 베이스 이미지(`eclipse-temurin:21-jre`)는 제 판단.
 - AI 스킬: superpowers(brainstorming, writing-plans, subagent-driven-development), claude-md-management(완료 후 CLAUDE.md 갱신), `.claude/skills/java-springboot`.
 

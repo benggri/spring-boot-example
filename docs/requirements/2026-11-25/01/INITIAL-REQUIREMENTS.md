@@ -30,6 +30,10 @@
   - 대상: `api-rest`, `api-graphql`, `api-grpc` 각 앱
   - 시크릿(`JWT_SECRET`, DB 비밀번호)은 이미지에 넣지 않고 실행 시 환경 변수로 주입한다.
 
+- Lombok: getter/setter는 직접 작성하지 않고 Lombok(`@Getter`, 필요한 곳에만 `@Setter`)으로 생성한다. 기존 소스의 수작업 getter/setter는 제거한다.
+  - 엔티티에는 `@Setter`를 쓰지 않는다. 상태 변경은 도메인 메서드(`rename`, `edit`)로만 한다.
+  - 값 전달용은 `record`를 우선하고, 레코드는 Lombok이 필요 없다.
+
 ## 범위
 
 - 목표
