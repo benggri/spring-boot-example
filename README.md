@@ -170,7 +170,7 @@ docker run --rm --add-host=host.docker.internal:host-gateway \
 
 ## 개발 흐름
 
-이 저장소는 TDD(Red → Green → Refactor)로 만들었습니다. 실패하는 테스트를 먼저 쓰고, 통과시키는 최소 구현을 한 뒤 정리하며, 테스트와 구현은 Green 상태에서 한 커밋으로 남깁니다. 버그는 재현 테스트부터 씁니다. 요구사항 → spec → 계획 → Task별 구현/리뷰 전체 흐름과 규칙은 [docs/ai-dlc/GUIDE.md](docs/ai-dlc/GUIDE.md), 설계는 [설계 문서](docs/superpowers/specs/2026-11-25-spring-boot-example-design.md) 에 있습니다. 이 프로젝트의 CLAUDE.md 는 `claude-md-management` 스킬로 관리할 예정입니다.
+이 저장소는 TDD(Red → Green → Refactor)로 만들었습니다. 실패하는 테스트를 먼저 쓰고, 통과시키는 최소 구현을 한 뒤 정리하며, 테스트와 구현은 Green 상태에서 한 커밋으로 남깁니다. 버그는 재현 테스트부터 씁니다. 요구사항 → spec → 계획 → Task별 구현/리뷰 전체 흐름과 규칙은 [docs/ai-dlc/GUIDE.md](docs/ai-dlc/GUIDE.md), 설계는 [설계 문서](docs/superpowers/specs/2026-11-25-spring-boot-example-design.md) 에 있습니다. AI 코딩 에이전트용 지침은 루트 [CLAUDE.md](CLAUDE.md) 에 있고, `claude-md-management` 스킬로 관리합니다.
 
 ## 모듈을 내 프로젝트로 가져가기
 

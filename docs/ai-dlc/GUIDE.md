@@ -25,7 +25,7 @@ AI-DLC(AI-Driven Development Life Cycle)는 AI가 개발 주기의 실행을 맡
 | Unit | 계획의 Task 하나(Task 1~15) |
 | Bolt | Task 하나의 구현 → 리뷰 → 수정 사이클 |
 | Construction | `superpowers:subagent-driven-development` 실행 |
-| Operations | Jib 컨테이너 이미지, Prometheus 모니터링(`monitoring/README.md`), 모듈별 README 런북, CLAUDE.md(갱신 예정) |
+| Operations | Jib 컨테이너 이미지, Prometheus 모니터링(`monitoring/README.md`), 모듈별 README 런북, CLAUDE.md |
 
 실제 진행 순서는 다음과 같았다.
 
@@ -35,7 +35,7 @@ AI-DLC(AI-Driven Development Life Cycle)는 AI가 개발 주기의 실행을 맡
 4. `superpowers:writing-plans`가 Global Constraints, Review Focus, Task 목록을 가진 계획을 만든다.
 5. 사람이 실행 방식으로 Subagent-driven을 고른다.
 6. Task별로 구현 → 리뷰 → 수정을 반복한다.
-7. 전체 브랜치 최종 리뷰(opus 리뷰어)를 했고, 지적 사항은 하나의 fix wave로 한꺼번에 고쳤다. CLAUDE.md 갱신(`claude-md-management`)은 예정이며 fix wave 뒤에 컨트롤러가 하므로 이 문서 작성 시점에는 아직 하지 않았다.
+7. 전체 브랜치 최종 리뷰(opus 리뷰어)를 했고, 지적 사항은 하나의 fix wave로 한꺼번에 고쳤다. fix wave 뒤에 `claude-md-management`로 루트 `CLAUDE.md`를 만들었다.
 
 ## 3. Spec-driven 규칙
 
@@ -151,7 +151,7 @@ AI-DLC(AI-Driven Development Life Cycle)는 AI가 개발 주기의 실행을 맡
 - 에이전트 스킬 `okf-generate`(번들 작성·갱신·마이그레이션·검증)와 `okf-consume`(번들 기반 질의응답, 신뢰 등급·상태·최신성 보고)가 있다. Agent Skills 형식이며 설치법은 저장소 README의 `#agent-skills`를 본다.
 - 한계: 폴더와 frontmatter라는 컨테이너 규격이지 지식의 의미까지 표준화하지는 않는다는 비판이 있다.
 
-**이 프로젝트에서의 위치.** 기존 문서(spec, 계획, README)는 OKF가 아니며 바꾸지 않는다. CLAUDE.md는 아직 없고 갱신 예정이며(`claude-md-management`로 만들 계획), 만들어져도 `type`이 없는 `.md`라 OKF 대상이 아니다.
+**이 프로젝트에서의 위치.** 기존 문서(spec, 계획, README)는 OKF가 아니며 바꾸지 않는다. 루트 `CLAUDE.md`(`claude-md-management`로 작성)도 `type`이 없는 `.md`라 OKF 대상이 아니다.
 도메인 개념과 결정 기록처럼 여러 서브에이전트가 반복해 참조할 지식이 커질 때만 별도 번들로 분리하는 선택지로 둔다. 만들 경우의 예시 레이아웃이다.
 
 ```text
