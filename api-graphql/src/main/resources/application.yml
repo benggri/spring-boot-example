@@ -25,6 +25,7 @@ app:
     slow-threshold-ms: 500
   graphql:
     max-query-depth: 10
+    max-root-fields: 10
 
 management:
   server:
@@ -32,6 +33,9 @@ management:
     port: 8082
   endpoints:
     web:
+      discovery:
+        # no /actuator links page: it would list the exposed endpoints to anyone who can reach the port
+        enabled: false
       exposure:
         include: health,prometheus
   endpoint:

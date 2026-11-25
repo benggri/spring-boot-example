@@ -11,8 +11,16 @@ class GraphqlPropertiesTest {
     @Test
     void maxQueryDepthBelowOneIsInvalid() {
         try (var factory = Validation.buildDefaultValidatorFactory()) {
-            assertThat(factory.getValidator().validate(new GraphqlProperties(0))).hasSize(1);
-            assertThat(factory.getValidator().validate(new GraphqlProperties(1))).isEmpty();
+            assertThat(factory.getValidator().validate(new GraphqlProperties(0, 10))).hasSize(1);
+            assertThat(factory.getValidator().validate(new GraphqlProperties(1, 10))).isEmpty();
+        }
+    }
+
+    @Test
+    void maxRootFieldsBelowOneIsInvalid() {
+        try (var factory = Validation.buildDefaultValidatorFactory()) {
+            assertThat(factory.getValidator().validate(new GraphqlProperties(10, 0))).hasSize(1);
+            assertThat(factory.getValidator().validate(new GraphqlProperties(10, 1))).isEmpty();
         }
     }
 }

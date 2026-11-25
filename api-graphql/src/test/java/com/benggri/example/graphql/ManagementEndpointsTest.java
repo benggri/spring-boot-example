@@ -9,6 +9,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
 import java.util.regex.Matcher;
@@ -62,19 +63,50 @@ class ManagementEndpointsTest extends PostgresTestBase {
     }
 
     @Test
-    void prometheus_notServedOnMainPort() throws Exception {
-        assertThat(get(appPort, "/actuator/prometheus", null).statusCode()).isNotEqualTo(200);
-        assertThat(get(appPort, "/actuator/health", null).statusCode()).isNotEqualTo(200);
+    void actuator_notServedOnMainPort() throws Exception {
+        // anonymous: the main chain demands a token (401); with a token there is simply no such path (404)
+        for (String path : List.of("/actuator/prometheus", "/actuator/health", "/actuator", "/actuator/")) {
+            assertThat(get(appPort, path, null).statusCode()).as("anonymous main %s", path).isEqualTo(401);
+            assertThat(get(appPort, path, userToken()).statusCode()).as("authenticated main %s", path)
+                    .isEqualTo(404);
+        }
     }
 
     @Test
     void nonExposedActuatorEndpointsAreNotAvailable() throws Exception {
         for (String name : List.of("env", "beans", "metrics", "info", "loggers", "heapdump", "")) {
+            // management port: ManagementSecurityConfig denies every non-exposed endpoint (401 anonymous)
             assertThat(get(managementPort, "/actuator/" + name, null).statusCode())
-                    .as("management /actuator/%s", name).isNotEqualTo(200);
+                    .as("management /actuator/%s", name).isEqualTo(401);
             assertThat(get(appPort, "/actuator/" + name, null).statusCode())
-                    .as("main /actuator/%s", name).isNotEqualTo(200);
+                    .as("main anonymous /actuator/%s", name).isEqualTo(401);
+            assertThat(get(appPort, "/actuator/" + name, userToken()).statusCode())
+                    .as("main authenticated /actuator/%s", name).isEqualTo(404);
         }
+    }
+
+    @Test
+    void actuatorDiscoveryPage_isNotServed() throws Exception {
+        // management.endpoints.web.discovery.enabled=false: no links page, in either form of the path
+        for (String path : List.of("/actuator", "/actuator/")) {
+            HttpResponse<String> res = get(managementPort, path, null);
+            assertThat(res.statusCode()).as("management %s", path).isEqualTo(401);
+            assertThat(res.body()).as("management %s", path).doesNotContain("prometheus").doesNotContain("_links");
+        }
+    }
+
+    @Test
+    void managementPort_doesNotServeApplicationEndpoints() throws Exception {
+        String token = userToken();
+        for (String[] call : List.of(new String[] {"GET", "/api/posts"}, new String[] {"POST", "/auth/login"},
+                new String[] {"POST", "/graphql"})) {
+            assertThat(send(call[0], managementPort, call[1], token).statusCode())
+                    .as("management %s %s with token", call[0], call[1]).isEqualTo(404);
+        }
+        // anonymous: the inherited chain answers 401, or 404 where the path is public in the main app
+        assertThat(send("GET", managementPort, "/api/posts", null).statusCode()).isEqualTo(401);
+        assertThat(send("POST", managementPort, "/graphql", null).statusCode()).isEqualTo(401);
+        assertThat(send("POST", managementPort, "/auth/login", null).statusCode()).isEqualTo(401);
     }
 
     @Test
@@ -154,6 +186,20 @@ class ManagementEndpointsTest extends PostgresTestBase {
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(body)).build();
         return HTTP.send(req, HttpResponse.BodyHandlers.ofString());
+    }
+
+    private static String userToken() {
+        return TokenFactory.token("1", "USER", "access", Duration.ZERO);
+    }
+
+    private static HttpResponse<String> send(String method, int port, String path, String bearer) throws Exception {
+        HttpRequest.Builder req = HttpRequest.newBuilder(URI.create("http://localhost:" + port + path))
+                .header("Content-Type", "application/json")
+                .method(method, HttpRequest.BodyPublishers.ofString("{}"));
+        if (bearer != null) {
+            req.header("Authorization", "Bearer " + bearer);
+        }
+        return HTTP.send(req.build(), HttpResponse.BodyHandlers.ofString());
     }
 
     private static HttpResponse<String> get(int port, String path, String bearer) throws Exception {

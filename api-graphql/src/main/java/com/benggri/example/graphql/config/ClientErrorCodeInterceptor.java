@@ -15,7 +15,8 @@ import reactor.core.publisher.Mono;
  * graphql-java reports malformed requests (syntax, schema validation, null for a non-null
  * argument, bad variables) before any resolver runs, so they bypass the exception resolver and
  * carry no {@code extensions.code}. This gives exactly those errors the project's
- * {@code BAD_REQUEST} code; the message stays graphql-java's own (it never contains values).
+ * {@code BAD_REQUEST} code; the message stays graphql-java's own. Those validation/coercion messages can
+ * quote client-supplied literals back to the same client; they are not logged by this application.
  */
 public class ClientErrorCodeInterceptor implements WebGraphQlInterceptor {
 

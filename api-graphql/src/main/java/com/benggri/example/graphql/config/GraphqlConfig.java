@@ -15,6 +15,12 @@ public class GraphqlConfig {
         return new MaxQueryDepthInstrumentation(properties.maxQueryDepth());
     }
 
+    /** Bounds aliased root fields (e.g. many login mutations in one request); see the class comment. */
+    @Bean
+    MaxRootFieldsInstrumentation maxRootFieldsInstrumentation(GraphqlProperties properties) {
+        return new MaxRootFieldsInstrumentation(properties.maxRootFields());
+    }
+
     @Bean
     ClientErrorCodeInterceptor clientErrorCodeInterceptor() {
         return new ClientErrorCodeInterceptor();
