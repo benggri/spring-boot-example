@@ -45,7 +45,7 @@ gRPC + JWT(메타데이터) 어댑터 모듈입니다. 비즈니스 규칙(소�
 ```bash
 cp .env.example .env        # 값을 채웁니다 (JWT_SECRET 포함)
 docker compose up -d
-export $(grep -v '^#' .env | xargs)
+set -a; source .env; set +a
 ./gradlew :api-grpc:bootRun
 ```
 
@@ -80,6 +80,9 @@ proto3 문자열은 U+0000 을 담을 수 있지만 PostgreSQL 은 저장/조회
 
 예제는 keepalive, 동시 호출 수(`max-concurrent-calls`), 호출 데드라인 제한을 설정하지 않았습니다. 운영에서는 TLS 와 함께 이 제한들을 추가하세요.
 
+- login/register 를 포함한 어떤 RPC 에도 속도 제한(rate limiting)이 없습니다. 운영에서는 게이트웨이나 리미터를 앞에 두세요.
+- 형식이 깨진 protobuf(예: `string` 필드의 잘못된 UTF-8)는 grpc-java 의 마샬러가 앱 코드와 인터셉터가 실행되기 **전에** `INTERNAL` 로 응답합니다. 토큰이 필요 없는 익명 메서드(Login/Register/Refresh)도 마찬가지이며, 프레임워크 동작이라 앱이 로그로 남기지 않습니다. (이 동작은 이 저장소에서 테스트로 **검증하지 않았습니다**.)
+
 ## proto 재생성 / 확인
 
 proto 는 `src/main/proto/{auth,member,post}.proto` (패키지 `example.v1`)입니다. 자바 코드는 `com.google.protobuf` 플러그인이 빌드할 때 `build/generated/sources/proto` 에 생성하며 커밋하지 않습니다(`protoc`/`protoc-gen-grpc-java` 버전은 `gradle.properties`). 다시 생성: `./gradlew :api-grpc:generateProto`. 생성 소스는 Checkstyle 대상이 아닙니다.
@@ -98,4 +101,9 @@ proto 는 `src/main/proto/{auth,member,post}.proto` (패키지 `example.v1`)입�
 - 커스텀 메트릭 `app.service.invocation` (Prometheus: `app_service_invocation_seconds_*`): 태그는 `class`, `method`, `outcome`(`success`|`failure`) 세 개뿐이며 인자, 이메일, 사용자 ID, 예외 메시지는 절대 태그/값에 넣지 않습니다.
 - 이 앱에는 Spring Security 웹 필터 체인과 서블릿 컨테이너가 없었으므로, actuator 가 HTTP 를 서비스할 수 있게 `spring-boot-starter-webmvc` 만 추가하고 `spring.main.web-application-type: servlet`, `server.port: 8083` 으로 설정했습니다 (`spring-boot-starter-security` 는 없으므로 생성된 비밀번호/기본 로그인도 없습니다).
 - gRPC 표준 `grpc.health.v1.Health` 서비스는 계속 JWT 인터셉터로 보호됩니다 (공개하지 않음). 프로브는 `http://localhost:8083/actuator/health` 를 사용하세요.
+- `/actuator` 링크(discovery) 페이지는 꺼져 있습니다(`management.endpoints.web.discovery.enabled: false`): 노출된 엔드포인트 목록을 알려 주지 않습니다. 테스트가 `/actuator` 와 `/actuator/` 가 200 이 아님을 고정합니다.
+- `management.endpoint.health.probes.enabled: false`: 응답 본문이 정확히 `{"status":"UP"}` 이도록 두었고, Kubernetes 용 liveness/readiness 그룹(`/actuator/health/liveness` 등)은 제공하지 않습니다. 쿠버네티스 프로브가 필요하면 이 값을 켜고 테스트를 함께 바꿔야 합니다.
+- Boot 의 gRPC 서버 observation(`GrpcServerObservationAutoConfiguration`)은 actuator(Micrometer observation)가 있을 때 켜지므로 api-grpc 에서는 gRPC 호출도 관찰됩니다. 실제로 `grpc_server_seconds_count|sum|max`, `grpc_server_received_total`/`grpc_server_sent_total`(태그 `rpc_service`, `rpc_method`, `rpc_type`, `grpc_status_code`)가 `/actuator/prometheus` 에 나타나며, `grpcCall_isRecordedByServerObservation` 테스트가 `Register` 호출 후 `grpc_server_seconds_count` 가 기록됨을 확인합니다.
+- 이 앱은 HTTP 포트가 8083 하나뿐이고(별도 관리 포트 없음) Spring Security 체인이 없어, 컨트롤러가 없는 서블릿 컨테이너가 actuator 외에는 아무것도 서비스하지 않습니다(`/api/posts`, `/graphql` 같은 경로는 404, `/actuator/health` 에 POST 는 405 로 테스트가 고정). Boot 기본 오류 JSON(`timestamp`, `status`, `error`, `path`)은 요청 경로를 같은 클라이언트에게 되돌려 주지만 스택 트레이스나 예외 메시지는 담지 않습니다(`errorBodies_carryNoTraceOrMessage`).
+- 바인드 주소: HTTP 포트(8083) 는 인증이 없고 이 예제는 `server.address` 를 지정하지 않아 모든 인터페이스에 바인딩됩니다. 의도된 트레이드오프입니다: compose 의 Prometheus 컨테이너가 `host.docker.internal`(호스트 게이트웨이 주소)로 호스트의 앱을 scrape 하려면 루프백이 아닌 주소로 바인딩되어 있어야 합니다. 운영에서는 방화벽/내부 네트워크로 막거나 주소를 제한하세요.
 - 전체 구성: [`monitoring/README.md`](../monitoring/README.md)

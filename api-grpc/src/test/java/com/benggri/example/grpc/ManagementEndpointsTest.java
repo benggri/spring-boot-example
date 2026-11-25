@@ -35,10 +35,50 @@ class ManagementEndpointsTest extends GrpcTestBase {
 
     @Test
     void nonExposedActuatorEndpointsAreNotAvailable() throws Exception {
+        // names include "" (/actuator/): the links page is disabled, so it is a plain 404 as well
         for (String name : List.of("env", "beans", "metrics", "info", "loggers", "heapdump", "")) {
             assertThat(get(appPort, "/actuator/" + name, null).statusCode())
-                    .as("/actuator/%s", name).isNotEqualTo(200);
+                    .as("/actuator/%s", name).isEqualTo(404);
         }
+    }
+
+    @Test
+    void actuatorDiscoveryPage_isNotServed() throws Exception {
+        // management.endpoints.web.discovery.enabled=false; this app has no security chain, so 404 not 401
+        for (String path : List.of("/actuator", "/actuator/")) {
+            HttpResponse<String> res = get(appPort, path, null);
+            assertThat(res.statusCode()).as(path).isEqualTo(404);
+            assertThat(res.body()).as(path).doesNotContain("_links").doesNotContain("prometheus");
+        }
+    }
+
+    @Test
+    void httpPort_servesNothingButHealthAndPrometheus() throws Exception {
+        for (String path : List.of("/api/posts", "/auth/login", "/graphql", "/", "/swagger-ui.html")) {
+            assertThat(get(appPort, path, null).statusCode()).as("GET %s", path).isEqualTo(404);
+        }
+        assertThat(post(appPort, "/actuator/health").statusCode()).isEqualTo(405);
+        assertThat(post(appPort, "/graphql").statusCode()).isEqualTo(404);
+    }
+
+    @Test
+    void errorBodies_carryNoTraceOrMessage() throws Exception {
+        // Boot's default error JSON echoes the request path back to the same client; nothing else
+        for (String path : List.of("/api/posts", "/actuator/env", "/error")) {
+            assertThat(get(appPort, path, null).body()).as(path)
+                    .doesNotContain("trace").doesNotContain("exception").doesNotContain("message")
+                    .doesNotContain("Exception");
+        }
+    }
+
+    @Test
+    void grpcCall_isRecordedByServerObservation() throws Exception {
+        register(uniqueEmail());
+
+        String metrics = get(appPort, "/actuator/prometheus", null).body();
+
+        assertThat(metrics).containsPattern("grpc_server_seconds_count\\{[^}]*rpc_method=\"Register\""
+                + "[^}]*rpc_service=\"example.v1.MemberService\"");
     }
 
     @Test
@@ -96,6 +136,12 @@ class ManagementEndpointsTest extends GrpcTestBase {
     private void register(String email) {
         members(null).register(RegisterRequest.newBuilder()
                 .setEmail(email).setPassword(PASSWORD).setName("Tester").build());
+    }
+
+    private static HttpResponse<String> post(int port, String path) throws Exception {
+        HttpRequest req = HttpRequest.newBuilder(URI.create("http://localhost:" + port + path))
+                .header("Content-Type", "application/json").POST(HttpRequest.BodyPublishers.ofString("{}")).build();
+        return HTTP.send(req, HttpResponse.BodyHandlers.ofString());
     }
 
     private static HttpResponse<String> get(int port, String path, String bearer) throws Exception {
