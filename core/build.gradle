@@ -5,6 +5,8 @@ plugins {
 
 dependencies {
     api 'org.springframework.boot:spring-boot-starter-data-jpa'
+    api 'org.springframework.boot:spring-boot-starter-flyway'
+    runtimeOnly 'org.flywaydb:flyway-database-postgresql'
     runtimeOnly 'org.postgresql:postgresql'
 
     testFixturesApi 'org.springframework.boot:spring-boot-starter-test'
@@ -13,5 +15,6 @@ dependencies {
     testFixturesApi 'org.testcontainers:testcontainers-postgresql'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }

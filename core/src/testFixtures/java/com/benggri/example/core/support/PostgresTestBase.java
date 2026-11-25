@@ -22,7 +22,7 @@ public abstract class PostgresTestBase {
     @TestConfiguration(proxyBeanMethods = false)
     static class ContainerConfig {
 
-        @Bean
+        @Bean(destroyMethod = "")
         @ServiceConnection
         PostgreSQLContainer postgresContainer() {
             return POSTGRES;
