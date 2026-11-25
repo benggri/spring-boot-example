@@ -11,6 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.benggri.example.core.common.DuplicateException;
+import com.benggri.example.core.common.InvalidRequestException;
 import com.benggri.example.core.member.dto.MemberResult;
 import com.benggri.example.core.member.entity.Role;
 import com.benggri.example.core.member.service.MemberService;
@@ -72,6 +73,17 @@ class MemberControllerTest extends SliceTestBase {
                 .andExpect(status().isBadRequest())
                 .andExpect(content().string(not(containsString(shortPassword))))
                 .andExpect(content().string(not(containsString("not-an-email"))));
+    }
+
+    @Test
+    void register_invalidRequestReturnsGeneric400() throws Exception {
+        given(memberService.register(any(), any(), any()))
+                .willThrow(new InvalidRequestException("leaky-detail"));
+
+        mvc.perform(post("/api/members").contentType(MediaType.APPLICATION_JSON).content(BODY))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
+                .andExpect(content().string(not(containsString("leaky-detail"))));
     }
 
     @Test

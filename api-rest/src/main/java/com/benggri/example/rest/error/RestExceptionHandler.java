@@ -2,6 +2,7 @@ package com.benggri.example.rest.error;
 
 import com.benggri.example.core.common.DuplicateException;
 import com.benggri.example.core.common.ForbiddenException;
+import com.benggri.example.core.common.InvalidRequestException;
 import com.benggri.example.core.common.NotFoundException;
 import com.benggri.example.core.security.InvalidTokenException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -53,6 +54,11 @@ public class RestExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(DuplicateException.class)
     ProblemDetail duplicate() {
         return problem(HttpStatus.CONFLICT, "Resource already exists");
+    }
+
+    @ExceptionHandler(InvalidRequestException.class)
+    ProblemDetail invalidRequest() {
+        return problem(HttpStatus.BAD_REQUEST, "Invalid request");
     }
 
     @ExceptionHandler(BadCredentialsException.class)

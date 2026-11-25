@@ -31,7 +31,7 @@ abstract class IntegrationTestBase extends PostgresTestBase {
     private PostRepository postRepository;
 
     @Autowired
-    private MemberRepository memberRepository;
+    protected MemberRepository memberRepository;
 
     @DynamicPropertySource
     static void jwtProperties(DynamicPropertyRegistry registry) {

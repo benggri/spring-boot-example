@@ -3,6 +3,7 @@ package com.benggri.example.core.member.service;
 import com.benggri.example.core.aop.Audited;
 import com.benggri.example.core.common.DuplicateException;
 import com.benggri.example.core.common.ForbiddenException;
+import com.benggri.example.core.common.InvalidRequestException;
 import com.benggri.example.core.common.NotFoundException;
 import com.benggri.example.core.member.dto.MemberResult;
 import com.benggri.example.core.member.entity.Member;
@@ -10,6 +11,7 @@ import com.benggri.example.core.member.entity.Role;
 import com.benggri.example.core.member.repository.MemberRepository;
 import com.benggri.example.core.post.repository.PostRepository;
 import com.benggri.example.core.security.AuthUser;
+import java.nio.charset.StandardCharsets;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -20,6 +22,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @Transactional
 public class MemberService {
+
+    private static final int BCRYPT_MAX_PASSWORD_BYTES = 72;
 
     private final MemberRepository memberRepository;
     private final PostRepository postRepository;
@@ -34,6 +38,7 @@ public class MemberService {
 
     @Audited("member.register")
     public MemberResult register(String email, String rawPassword, String name) {
+        requireHashablePassword(rawPassword);
         if (memberRepository.existsByEmail(email)) {
             throw new DuplicateException("Email already registered: " + email);
         }
@@ -43,6 +48,14 @@ public class MemberService {
         } catch (DataIntegrityViolationException e) {
             // the unique index on email is the authority when two registrations race
             throw new DuplicateException("Email already registered: " + email);
+        }
+    }
+
+    /** BCrypt throws on more than 72 bytes; reject first so callers get a clean error, not a 500. */
+    private static void requireHashablePassword(String rawPassword) {
+        if (rawPassword != null
+                && rawPassword.getBytes(StandardCharsets.UTF_8).length > BCRYPT_MAX_PASSWORD_BYTES) {
+            throw new InvalidRequestException("Password is too long");
         }
     }
 

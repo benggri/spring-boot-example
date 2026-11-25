@@ -100,6 +100,18 @@ class RestSecurityIntegrationTest extends IntegrationTestBase {
     }
 
     @Test
+    void register_multiBytePasswordOver72BytesReturns400WithoutEchoingIt() throws Exception {
+        String email = uniqueEmail();
+        String password = "가".repeat(30); // 30 chars passes @Size(max=72) but is 90 bytes
+        mvc.perform(post("/api/members").contentType(MediaType.APPLICATION_JSON)
+                        .content(json("email", email, "password", password, "name", "Tester")))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
+                .andExpect(content().string(not(containsString(password))));
+        assertThat(memberRepository.existsByEmail(email)).isFalse();
+    }
+
+    @Test
     void register_duplicateEmailReturns409() throws Exception {
         String email = uniqueEmail();
         register(email);

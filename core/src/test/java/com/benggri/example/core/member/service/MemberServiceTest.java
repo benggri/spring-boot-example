@@ -4,12 +4,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.benggri.example.core.common.DuplicateException;
 import com.benggri.example.core.common.ForbiddenException;
+import com.benggri.example.core.common.InvalidRequestException;
 import com.benggri.example.core.common.NotFoundException;
 import com.benggri.example.core.member.dto.MemberResult;
 import com.benggri.example.core.member.entity.Member;
@@ -50,6 +52,29 @@ class MemberServiceTest {
         Member m = Member.create("a@x.com", "hash", "A", role);
         ReflectionTestUtils.setField(m, "id", id);
         return m;
+    }
+
+    @Test
+    void register_passwordOver72BytesThrowsInvalidRequest() {
+        PasswordEncoder spyEncoder = mock(PasswordEncoder.class);
+        String password = "가".repeat(30); // 90 UTF-8 bytes
+
+        assertThatThrownBy(() -> new MemberService(memberRepository, postRepository, spyEncoder)
+                .register("a@x.com", password, "A"))
+                .isInstanceOf(InvalidRequestException.class)
+                .message().doesNotContain(password);
+        verify(spyEncoder, never()).encode(any());
+        verify(memberRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void register_passwordOfExactly72BytesIsAccepted() {
+        when(memberRepository.existsByEmail("a@x.com")).thenReturn(false);
+        when(memberRepository.saveAndFlush(any(Member.class))).thenAnswer(i -> i.getArgument(0));
+
+        MemberResult result = service().register("a@x.com", "가".repeat(24), "A"); // 72 bytes
+
+        assertThat(result.email()).isEqualTo("a@x.com");
     }
 
     @Test
