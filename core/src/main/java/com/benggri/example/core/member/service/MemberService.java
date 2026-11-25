@@ -5,6 +5,7 @@ import com.benggri.example.core.common.DuplicateException;
 import com.benggri.example.core.common.ForbiddenException;
 import com.benggri.example.core.common.InvalidRequestException;
 import com.benggri.example.core.common.NotFoundException;
+import com.benggri.example.core.member.dto.AuthorResult;
 import com.benggri.example.core.member.dto.MemberResult;
 import com.benggri.example.core.member.entity.Member;
 import com.benggri.example.core.member.entity.Role;
@@ -12,6 +13,10 @@ import com.benggri.example.core.member.repository.MemberRepository;
 import com.benggri.example.core.post.repository.PostRepository;
 import com.benggri.example.core.security.AuthUser;
 import java.nio.charset.StandardCharsets;
+import java.util.Map;
+import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -72,6 +77,20 @@ public class MemberService {
             throw new ForbiddenException("Only an admin may list members");
         }
         return memberRepository.findAll(pageable).map(MemberResult::from);
+    }
+
+    /**
+     * Batch lookup of public author data (id and name only) in one query. No authorization check:
+     * names are visible to any authenticated caller. Unknown ids are simply absent.
+     */
+    @Transactional(readOnly = true)
+    public Map<Long, AuthorResult> findAuthors(Set<Long> ids) {
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        return memberRepository.findAllById(ids).stream()
+                .map(AuthorResult::from)
+                .collect(Collectors.toMap(AuthorResult::id, Function.identity()));
     }
 
     @Audited("member.update")

@@ -14,6 +14,7 @@ import com.benggri.example.core.common.DuplicateException;
 import com.benggri.example.core.common.ForbiddenException;
 import com.benggri.example.core.common.InvalidRequestException;
 import com.benggri.example.core.common.NotFoundException;
+import com.benggri.example.core.member.dto.AuthorResult;
 import com.benggri.example.core.member.dto.MemberResult;
 import com.benggri.example.core.member.entity.Member;
 import com.benggri.example.core.member.entity.Role;
@@ -23,7 +24,9 @@ import com.benggri.example.core.security.AuthUser;
 import java.lang.reflect.RecordComponent;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -104,6 +107,38 @@ class MemberServiceTest {
         assertThat(encoder.matches("pw", hash)).isTrue();
         assertThat(result.email()).isEqualTo("a@x.com");
         assertThat(result.role()).isEqualTo(Role.USER);
+    }
+
+    @Test
+    void findAuthors_returnsIdAndNameOnly() {
+        when(memberRepository.findAllById(Set.of(1L, 2L)))
+                .thenReturn(List.of(member(1L, Role.USER), member(2L, Role.ADMIN)));
+
+        Map<Long, AuthorResult> authors = service().findAuthors(Set.of(1L, 2L));
+
+        assertThat(authors).containsOnlyKeys(1L, 2L);
+        assertThat(authors.get(1L)).isEqualTo(new AuthorResult(1L, "A"));
+        assertThat(Arrays.stream(AuthorResult.class.getRecordComponents()).map(RecordComponent::getName))
+                .containsExactly("id", "name");
+    }
+
+    @Test
+    void authorResult_hasNoEmailRoleOrPasswordHashComponent() {
+        assertThat(Arrays.stream(AuthorResult.class.getRecordComponents()).map(RecordComponent::getName))
+                .doesNotContain("email", "role", "passwordHash");
+    }
+
+    @Test
+    void findAuthors_emptyInputReturnsEmptyMapWithoutQuery() {
+        assertThat(service().findAuthors(Set.of())).isEmpty();
+        verifyNoInteractions(memberRepository);
+    }
+
+    @Test
+    void findAuthors_ignoresUnknownIds() {
+        when(memberRepository.findAllById(Set.of(1L, 99L))).thenReturn(List.of(member(1L, Role.USER)));
+
+        assertThat(service().findAuthors(Set.of(1L, 99L))).containsOnlyKeys(1L);
     }
 
     @Test
