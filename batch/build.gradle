@@ -8,3 +8,8 @@ dependencies {
     testImplementation 'org.springframework.boot:spring-boot-starter-batch-jdbc-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
+
+tasks.withType(Test).configureEach {
+    // non-UTC default zone: proves the UTC day window does not depend on the JVM time zone
+    systemProperty 'user.timezone', 'Asia/Seoul'
+}

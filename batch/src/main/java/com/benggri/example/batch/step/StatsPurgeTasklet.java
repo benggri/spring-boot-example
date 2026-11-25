@@ -1,6 +1,5 @@
 package com.benggri.example.batch.step;
 
-import java.sql.Date;
 import java.time.LocalDate;
 import org.springframework.batch.core.scope.context.ChunkContext;
 import org.springframework.batch.core.step.StepContribution;
@@ -25,7 +24,7 @@ public class StatsPurgeTasklet implements Tasklet {
     public RepeatStatus execute(StepContribution contribution,
             ChunkContext chunkContext) {
         int deleted = jdbc.update("DELETE FROM member_post_stats WHERE stat_date < ?",
-                Date.valueOf(runDate.minusDays(retentionDays)));
+                runDate.minusDays(retentionDays));
         contribution.incrementWriteCount(deleted);
         return RepeatStatus.FINISHED;
     }

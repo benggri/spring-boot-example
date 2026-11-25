@@ -2,8 +2,8 @@ package com.benggri.example.batch.step;
 
 import com.benggri.example.batch.config.BatchProperties;
 import com.benggri.example.batch.dto.PostCountRow;
-import java.sql.Timestamp;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import javax.sql.DataSource;
 import org.springframework.batch.core.configuration.annotation.StepScope;
@@ -26,15 +26,15 @@ public class PostCountReaderConfig {
             @Value("#{jobParameters['runDate']}") String runDate) {
         // window [runDate 00:00Z, runDate+1d 00:00Z): UTC, independent of the JVM time zone
         LocalDate day = LocalDate.parse(runDate);
-        Timestamp from = Timestamp.from(day.atStartOfDay().toInstant(ZoneOffset.UTC));
-        Timestamp to = Timestamp.from(day.plusDays(1).atStartOfDay().toInstant(ZoneOffset.UTC));
+        OffsetDateTime from = day.atStartOfDay().atOffset(ZoneOffset.UTC);
+        OffsetDateTime to = day.plusDays(1).atStartOfDay().atOffset(ZoneOffset.UTC);
         return new JdbcCursorItemReaderBuilder<PostCountRow>()
                 .name("postCountReader")
                 .dataSource(dataSource)
                 .sql(SQL)
                 .preparedStatementSetter(ps -> {
-                    ps.setTimestamp(1, from);
-                    ps.setTimestamp(2, to);
+                    ps.setObject(1, from);
+                    ps.setObject(2, to);
                 })
                 .rowMapper((rs, rowNum) -> new PostCountRow(rs.getLong("member_id"), rs.getLong("post_count")))
                 .fetchSize(properties.chunkSize())

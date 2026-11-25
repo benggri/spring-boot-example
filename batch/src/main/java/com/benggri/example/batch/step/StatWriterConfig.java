@@ -1,7 +1,6 @@
 package com.benggri.example.batch.step;
 
 import com.benggri.example.batch.dto.StatRow;
-import java.sql.Date;
 import javax.sql.DataSource;
 import org.springframework.batch.infrastructure.item.database.JdbcBatchItemWriter;
 import org.springframework.batch.infrastructure.item.database.builder.JdbcBatchItemWriterBuilder;
@@ -23,7 +22,7 @@ public class StatWriterConfig {
                 .sql(SQL)
                 .itemPreparedStatementSetter((row, ps) -> {
                     ps.setLong(1, row.memberId());
-                    ps.setDate(2, Date.valueOf(row.statDate()));
+                    ps.setObject(2, row.statDate());
                     ps.setInt(3, row.postCount());
                 })
                 .assertUpdates(true)
