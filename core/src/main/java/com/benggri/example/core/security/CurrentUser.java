@@ -19,7 +19,8 @@ public final class CurrentUser {
         }
         try {
             return JwtProvider.toAuthUser(jwt);
-        } catch (IllegalArgumentException e) {
+        } catch (RuntimeException e) {
+            // claim values are never put in the message; the cause stays in the local chain
             throw new AuthenticationCredentialsNotFoundException("JWT lacks a valid subject or role", e);
         }
     }

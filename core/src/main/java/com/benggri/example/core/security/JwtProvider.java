@@ -15,7 +15,6 @@ import org.springframework.security.oauth2.jwt.JwtClaimsSet;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
-import org.springframework.security.oauth2.jwt.JwtException;
 import org.springframework.security.oauth2.jwt.JwtTimestampValidator;
 import org.springframework.security.oauth2.jwt.JwsHeader;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
@@ -83,8 +82,9 @@ public class JwtProvider {
         try {
             Jwt jwt = decoder.decode(token);
             return toAuthUser(jwt);
-        } catch (JwtException | IllegalArgumentException e) {
-            // never echo the token or the underlying parser text that could quote it
+        } catch (RuntimeException e) {
+            // JwtException, IllegalArgumentException and anything else a malformed claim can raise (never a 500);
+            // never echo the token, claim values or parser text that could quote them: the cause stays local
             throw new InvalidTokenException("Invalid token", e);
         }
     }
@@ -111,9 +111,15 @@ public class JwtProvider {
 
     private static OAuth2TokenValidator<Jwt> typeValidator(String expectedType) {
         OAuth2Error error = new OAuth2Error("invalid_token", "Unexpected token type", null);
-        return jwt -> expectedType.equals(jwt.getClaimAsString(CLAIM_TYPE))
-                ? OAuth2TokenValidatorResult.success()
-                : OAuth2TokenValidatorResult.failure(error);
+        return jwt -> {
+            try {
+                return expectedType.equals(jwt.getClaimAsString(CLAIM_TYPE))
+                        ? OAuth2TokenValidatorResult.success()
+                        : OAuth2TokenValidatorResult.failure(error);
+            } catch (RuntimeException e) {
+                return OAuth2TokenValidatorResult.failure(error); // typ of an unconvertible JSON type
+            }
+        };
     }
 
     private static OAuth2TokenValidator<Jwt> identityValidator() {
@@ -122,7 +128,7 @@ public class JwtProvider {
             try {
                 toAuthUser(jwt);
                 return OAuth2TokenValidatorResult.success();
-            } catch (IllegalArgumentException e) {
+            } catch (RuntimeException e) {
                 return OAuth2TokenValidatorResult.failure(error);
             }
         };
