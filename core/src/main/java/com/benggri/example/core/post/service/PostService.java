@@ -3,6 +3,7 @@ package com.benggri.example.core.post.service;
 import com.benggri.example.core.aop.Audited;
 import com.benggri.example.core.common.ForbiddenException;
 import com.benggri.example.core.common.NotFoundException;
+import com.benggri.example.core.common.TextGuard;
 import com.benggri.example.core.member.entity.Member;
 import com.benggri.example.core.member.repository.MemberRepository;
 import com.benggri.example.core.post.dto.PostResult;
@@ -22,6 +23,8 @@ public class PostService {
 
     static final int DEFAULT_PAGE_SIZE = 20;
     static final int MAX_PAGE_SIZE = 100;
+    /** Bounds the cost of the ILIKE '%keyword%' scan. */
+    static final int MAX_KEYWORD_LENGTH = 200;
 
     private final PostRepository postRepository;
     private final MemberRepository memberRepository;
@@ -33,6 +36,7 @@ public class PostService {
 
     @Audited("post.create")
     public PostResult create(AuthUser actor, String title, String content) {
+        requireCleanPost(title, content);
         Member author = memberRepository.findById(actor.id())
                 .orElseThrow(() -> new NotFoundException("Member not found: " + actor.id()));
         return PostResult.from(postRepository.save(Post.create(author, title, content)));
@@ -45,11 +49,14 @@ public class PostService {
 
     @Transactional(readOnly = true)
     public Page<PostResult> search(PostSearchCondition cond, Pageable pageable) {
+        TextGuard.requireClean(cond.keyword());
+        TextGuard.requireMaxLength(cond.keyword(), MAX_KEYWORD_LENGTH);
         return postRepository.search(cond, normalize(pageable)).map(PostResult::from);
     }
 
     @Audited("post.update")
     public PostResult update(AuthUser actor, Long postId, String title, String content) {
+        requireCleanPost(title, content);
         Post post = find(postId);
         requireOwnerOrAdmin(actor, post.getMember().getId());
         post.edit(title, content);
@@ -61,6 +68,11 @@ public class PostService {
         Post post = find(postId);
         requireOwnerOrAdmin(actor, post.getMember().getId());
         postRepository.delete(post);
+    }
+
+    private static void requireCleanPost(String title, String content) {
+        TextGuard.requireClean(title);
+        TextGuard.requireClean(content);
     }
 
     private Post find(Long id) {

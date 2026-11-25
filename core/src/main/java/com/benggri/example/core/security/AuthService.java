@@ -1,5 +1,6 @@
 package com.benggri.example.core.security;
 
+import com.benggri.example.core.common.TextGuard;
 import com.benggri.example.core.member.entity.Member;
 import com.benggri.example.core.member.repository.MemberRepository;
 import java.util.UUID;
@@ -33,6 +34,8 @@ public class AuthService {
     }
 
     public TokenPair login(String email, String rawPassword) {
+        // a NUL would make the lookup throw a driver error; reject it before any query
+        TextGuard.requireClean(email);
         Member member = memberRepository.findByEmail(email).orElse(null);
         if (member == null) {
             passwordEncoder.matches(String.valueOf(rawPassword), dummyHash);

@@ -5,6 +5,7 @@ import com.benggri.example.core.common.DuplicateException;
 import com.benggri.example.core.common.ForbiddenException;
 import com.benggri.example.core.common.InvalidRequestException;
 import com.benggri.example.core.common.NotFoundException;
+import com.benggri.example.core.common.TextGuard;
 import com.benggri.example.core.member.dto.AuthorResult;
 import com.benggri.example.core.member.dto.MemberResult;
 import com.benggri.example.core.member.entity.Member;
@@ -43,6 +44,8 @@ public class MemberService {
 
     @Audited("member.register")
     public MemberResult register(String email, String rawPassword, String name) {
+        TextGuard.requireClean(email);
+        TextGuard.requireClean(name);
         requireHashablePassword(rawPassword);
         if (memberRepository.existsByEmail(email)) {
             throw new DuplicateException("Email already registered: " + email);
@@ -58,8 +61,10 @@ public class MemberService {
 
     /** BCrypt throws on more than 72 bytes; reject first so callers get a clean error, not a 500. */
     private static void requireHashablePassword(String rawPassword) {
-        if (rawPassword != null
-                && rawPassword.getBytes(StandardCharsets.UTF_8).length > BCRYPT_MAX_PASSWORD_BYTES) {
+        if (rawPassword == null || rawPassword.isBlank()) {
+            throw new InvalidRequestException("Invalid input");
+        }
+        if (rawPassword.getBytes(StandardCharsets.UTF_8).length > BCRYPT_MAX_PASSWORD_BYTES) {
             throw new InvalidRequestException("Password is too long");
         }
     }
@@ -95,6 +100,7 @@ public class MemberService {
 
     @Audited("member.update")
     public MemberResult update(AuthUser actor, Long id, String name) {
+        TextGuard.requireClean(name);
         Member member = find(id);
         requireSelfOrAdmin(actor, id);
         member.rename(name);
